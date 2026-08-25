@@ -1,6 +1,6 @@
 services:
   easynotice:
-    image: ${EASYNOTICE_IMAGE:-ghcr.io/replace-with-your-github/easynotice:latest}
+    image: ${EASYNOTICE_IMAGE:-ghcr.io/xudong7587/easynotice:latest}
     container_name: easynotice
     restart: unless-stopped
     ports:

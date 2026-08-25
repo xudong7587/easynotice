@@ -31,7 +31,7 @@ EasyNotice 是面向 NAS 用户的统一通知 Docker。它把不同容器发来
 
 1. `.github/workflows/ci.yml` 会执行类型检查、测试和生产构建。
 2. `.github/workflows/publish-image.yml` 会在推送到 `main` 后再次通过检查，再构建 `linux/amd64` 和 `linux/arm64`；检查失败不会发布镜像。
-3. 镜像自动发布为 `ghcr.io/你的github用户名/easynotice:latest`。
+3. 镜像自动发布为 `ghcr.io/xudong7587/easynotice:latest`。
 4. 打开 GitHub 仓库的 Packages 页面。如果希望 NAS 免登录拉取，把该 Package 的可见性设置为 Public。
 5. 复制 `.env.example` 为 `.env`，把镜像地址改成自己的地址。
 
