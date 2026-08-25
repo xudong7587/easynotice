@@ -35,6 +35,8 @@ EasyNotice 是面向 NAS 用户的统一通知 Docker。它把不同容器发来
 4. 打开 GitHub 仓库的 Packages 页面。如果希望 NAS 免登录拉取，把该 Package 的可见性设置为 Public。
 5. 复制 `.env.example` 为 `.env`，把镜像地址改成自己的地址。
 
+官方 Compose 只拉取公开的独立镜像，不依赖源码目录、Node.js 或开发电脑。服务在容器内明确监听 `0.0.0.0:18088`，默认通过 NAS 的 `18088` 端口向局域网开放。可以在 `.env` 中用 `EASYNOTICE_PORT` 修改 NAS 侧端口。
+
 ```bash
 cp .env.example .env
 docker compose pull

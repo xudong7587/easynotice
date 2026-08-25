@@ -6,6 +6,7 @@ const rootDir = process.cwd();
 export const dataDir = path.resolve(process.env.EASYNOTICE_DATA_DIR || path.join(rootDir, 'data'));
 export const uploadDir = path.join(dataDir, 'uploads');
 export const dbPath = path.join(dataDir, 'easynotice.db');
+export const host = process.env.HOST?.trim() || '0.0.0.0';
 export const port = Number(process.env.PORT || 18088);
 export const isProduction = process.env.NODE_ENV === 'production';
 

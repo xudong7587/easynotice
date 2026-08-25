@@ -4,13 +4,15 @@ services:
     container_name: easynotice
     restart: unless-stopped
     ports:
-      - "18088:18088"
+      - "${EASYNOTICE_PORT:-18088}:18088"
     environment:
       TZ: Asia/Shanghai
+      HOST: 0.0.0.0
+      PORT: 18088
     volumes:
       - ./data:/app/data
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18088/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://0.0.0.0:18088/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
