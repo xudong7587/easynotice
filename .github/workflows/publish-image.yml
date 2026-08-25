@@ -67,6 +67,7 @@ jobs:
             type=sha,prefix=sha-
 
       - name: Build and push multi-platform image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -78,3 +79,41 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: true
           sbom: true
+
+      - name: Smoke test data-directory permissions
+        shell: bash
+        run: |
+          container="easynotice-smoke"
+          data_dir="${RUNNER_TEMP}/easynotice-smoke-data"
+          mkdir -p "$data_dir"
+          sudo chown root:root "$data_dir"
+          sudo chmod 755 "$data_dir"
+          trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+
+          docker run --detach \
+            --name "$container" \
+            --publish 18088:18088 \
+            --volume "$data_dir:/app/data" \
+            "${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}"
+
+          ready=false
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18088/health >/dev/null; then
+              ready=true
+              break
+            fi
+            if [ "$(docker inspect --format '{{.State.Running}}' "$container")" != "true" ]; then
+              docker logs "$container"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          if [ "$ready" != "true" ]; then
+            docker logs "$container"
+            exit 1
+          fi
+
+          test "$(stat -c '%u' "$data_dir/uploads")" = "1000"
+          docker exec "$container" sh -c \
+            'test "$(awk "/^Uid:/ { print \$2 }" /proc/1/status)" = "1000"'
