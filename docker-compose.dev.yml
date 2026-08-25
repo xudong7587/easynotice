@@ -1,0 +1,4 @@
+services:
+  easynotice:
+    build: .
+    image: easynotice:local

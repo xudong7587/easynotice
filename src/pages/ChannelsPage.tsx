@@ -1,0 +1,118 @@
+import { useEffect, useState, type FormEvent } from 'react';
+import { Archive, ArrowRight, Check, PaperPlaneTilt, PencilSimple, Plus, TestTube } from '@phosphor-icons/react';
+import { toast } from 'sonner';
+import { api } from '../lib/api';
+import { formatDate } from '../lib/format';
+import type { Channel, ChannelType } from '../types';
+import { channelMeta } from '../components/channelMeta';
+import { DialogShell } from '../components/DialogShell';
+import { Button, Callout, EmptyState, Field, Input, NativeSelect, PageHeader, Skeleton, StatusBadge } from '../components/ui';
+
+const types = Object.keys(channelMeta) as ChannelType[];
+
+function blankConfig(type: ChannelType): Record<string, unknown> {
+  if (type === 'wecom_app') return { corpId: '', corpSecret: '', agentId: '', toUser: '@all', toParty: '' };
+  if (type === 'wecom_robot') return { webhookUrl: '' };
+  if (type === 'telegram') return { botToken: '', chatId: '', apiBase: 'https://api.telegram.org', disableNotification: false };
+  return { serverUrl: 'https://api.day.app', deviceKey: '', group: 'EasyNotice', sound: '', level: 'active' };
+}
+
+function editConfig(channel: Channel): Record<string, unknown> {
+  const config = { ...blankConfig(channel.type), ...channel.config };
+  if (channel.type === 'wecom_app') config.corpSecret = '';
+  if (channel.type === 'wecom_robot') config.webhookUrl = '';
+  if (channel.type === 'telegram') config.botToken = '';
+  if (channel.type === 'bark') config.deviceKey = '';
+  return config;
+}
+
+function ChannelFields({ type, config, setConfig, editing }: { type: ChannelType; config: Record<string, unknown>; setConfig: (value: Record<string, unknown>) => void; editing: boolean }) {
+  const set = (key: string, value: unknown) => setConfig({ ...config, [key]: value });
+  const secretHint = editing ? '已保存，留空表示不修改' : undefined;
+  if (type === 'wecom_robot') return <>
+    <Field label="机器人 Webhook 地址" hint={secretHint || '在企业微信群的机器人设置中复制完整地址'} required><Input type="password" value={String(config.webhookUrl || '')} onChange={(event) => set('webhookUrl', event.target.value)} placeholder={editing ? '已保存，输入新地址才会替换' : 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...'} required={!editing} /></Field>
+    <Callout>群机器人通常不依赖企业可信 IP，适合放在企微应用后面作为备用渠道。</Callout>
+  </>;
+  if (type === 'wecom_app') return <>
+    <div className="form-grid form-grid--2"><Field label="企业 ID (CorpID)" required><Input value={String(config.corpId || '')} onChange={(event) => set('corpId', event.target.value)} /></Field><Field label="应用 AgentId" required><Input inputMode="numeric" value={String(config.agentId || '')} onChange={(event) => set('agentId', event.target.value)} /></Field></div>
+    <Field label="应用 Secret" hint={secretHint} required><Input type="password" value={String(config.corpSecret || '')} onChange={(event) => set('corpSecret', event.target.value)} placeholder={editing ? '已保存，输入新 Secret 才会替换' : ''} required={!editing} /></Field>
+    <div className="form-grid form-grid--2"><Field label="接收成员" hint="默认 @all，也可填写成员账号并用 | 分隔"><Input value={String(config.toUser || '')} onChange={(event) => set('toUser', event.target.value)} /></Field><Field label="接收部门" hint="可选，多个部门用 | 分隔"><Input value={String(config.toParty || '')} onChange={(event) => set('toParty', event.target.value)} /></Field></div>
+    <Callout tone="warning">企业微信应用会校验企业可信 IP。公网 IP 变化时，这个渠道可能失败，请同时配置群机器人作为下一顺位。</Callout>
+  </>;
+  if (type === 'telegram') return <>
+    <Field label="Bot Token" hint={secretHint || '在 BotFather 创建机器人后获得'} required><Input type="password" value={String(config.botToken || '')} onChange={(event) => set('botToken', event.target.value)} placeholder={editing ? '已保存，输入新 Token 才会替换' : '123456:ABC...'} required={!editing} /></Field>
+    <Field label="Chat ID" hint="个人、群组或频道的数字 ID" required><Input value={String(config.chatId || '')} onChange={(event) => set('chatId', event.target.value)} /></Field>
+    <Field label="API 地址" hint="中国大陆网络可填写自建反向代理"><Input value={String(config.apiBase || '')} onChange={(event) => set('apiBase', event.target.value)} /></Field>
+    <label className="check-row"><input type="checkbox" checked={Boolean(config.disableNotification)} onChange={(event) => set('disableNotification', event.target.checked)} /><span><strong>静默发送</strong><small>消息到达时不播放提示音</small></span></label>
+  </>;
+  return <>
+    <Field label="Bark Key" hint={secretHint || '打开 iPhone 上的 Bark，复制推送地址末尾的 Key'} required><Input type="password" value={String(config.deviceKey || '')} onChange={(event) => set('deviceKey', event.target.value)} placeholder={editing ? '已保存，输入新 Key 才会替换' : ''} required={!editing} /></Field>
+    <Field label="Bark 服务器" hint="使用官方服务可保留默认值；也支持自建 Bark Server"><Input value={String(config.serverUrl || '')} onChange={(event) => set('serverUrl', event.target.value)} /></Field>
+    <div className="form-grid form-grid--2"><Field label="通知分组"><Input value={String(config.group || '')} onChange={(event) => set('group', event.target.value)} /></Field><Field label="时效级别"><NativeSelect value={String(config.level || 'active')} onChange={(event) => set('level', event.target.value)}><option value="active">普通</option><option value="timeSensitive">时效通知</option><option value="passive">静默</option></NativeSelect></Field></div>
+    <Callout>Bark 是 iPhone 推送工具。EasyNotice 会把标题、正文、分组、链接和远程图片图标一起发送过去。</Callout>
+  </>;
+}
+
+export function ChannelsPage() {
+  const [channels, setChannels] = useState<Channel[]>();
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Channel>();
+  const [type, setType] = useState<ChannelType>('wecom_robot');
+  const [name, setName] = useState('企业微信群机器人');
+  const [config, setConfig] = useState<Record<string, unknown>>(blankConfig('wecom_robot'));
+  const [saving, setSaving] = useState(false);
+
+  const load = () => api<{ channels: Channel[] }>('/api/channels').then((result) => setChannels(result.channels)).catch((error) => toast.error(error.message));
+  useEffect(() => { void load(); }, []);
+
+  const startCreate = () => {
+    setEditing(undefined); setType('wecom_robot'); setName('企业微信群机器人'); setConfig(blankConfig('wecom_robot')); setOpen(true);
+  };
+  const startEdit = (channel: Channel) => {
+    setEditing(channel); setType(channel.type); setName(channel.name); setConfig(editConfig(channel)); setOpen(true);
+  };
+  const chooseType = (value: ChannelType) => {
+    setType(value); setName(channelMeta[value].name); setConfig(blankConfig(value));
+  };
+  const save = async (event: FormEvent) => {
+    event.preventDefault(); setSaving(true);
+    try {
+      const path = editing ? `/api/channels/${editing.id}` : '/api/channels';
+      await api(path, { method: editing ? 'PUT' : 'POST', body: JSON.stringify({ name, type, config, enabled: true }) });
+      toast.success(editing ? '渠道设置已保存' : '通知出口已添加'); setOpen(false); load();
+    } catch (error) { toast.error(error instanceof Error ? error.message : '保存失败'); }
+    finally { setSaving(false); }
+  };
+  const test = async (channel: Channel) => {
+    const toastId = toast.loading(`正在测试 ${channel.name}`);
+    try { const result = await api<{ durationMs: number }>(`/api/channels/${channel.id}/test`, { method: 'POST', body: '{}' }); toast.success(`测试消息已发送，用时 ${result.durationMs} ms`, { id: toastId }); load(); }
+    catch (error) { toast.error(error instanceof Error ? error.message : '测试失败', { id: toastId }); load(); }
+  };
+  const archive = async (channel: Channel) => {
+    if (!window.confirm(`停用“${channel.name}”？它会从所有通知路由中移除。`)) return;
+    await api(`/api/channels/${channel.id}`, { method: 'DELETE' }); toast.success('通知出口已停用'); load();
+  };
+
+  return <div>
+    <PageHeader title="通知出口" description="消息最终发送到哪里。先测试单个出口，再为入口设置主备顺序。" action={<Button onClick={startCreate}><Plus size={17} />添加通知出口</Button>} />
+    <Callout title="推荐的补位方式">企业微信应用放第一位，企业微信群机器人放第二位。应用因可信 IP 失败后，EasyNotice 会自动尝试机器人。</Callout>
+    {!channels ? <Skeleton lines={5} /> : channels.length ? <div className="channel-grid section-block">{channels.map((channel) => {
+      const meta = channelMeta[channel.type]; const Icon = meta.icon;
+      return <article className={`channel-card ${!channel.enabled ? 'is-disabled' : ''}`} key={channel.id}>
+        <div className="channel-card__top"><span className="channel-logo channel-logo--large"><Icon size={25} weight="duotone" /></span><StatusBadge status={channel.enabled ? channel.lastStatus : 'archived'} /></div>
+        <h2>{channel.name}</h2><p>{meta.description}</p>
+        <dl className="channel-card__facts"><div><dt>渠道类型</dt><dd>{meta.short}</dd></div><div><dt>最近成功</dt><dd>{channel.lastSuccessAt ? formatDate(channel.lastSuccessAt) : '尚未测试'}</dd></div></dl>
+        {channel.lastError ? <div className="inline-error">{channel.lastError}</div> : null}
+        <div className="channel-card__actions"><Button variant="secondary" size="sm" onClick={() => test(channel)} disabled={!channel.enabled}><TestTube size={16} />发送测试</Button><Button variant="quiet" size="sm" onClick={() => startEdit(channel)}><PencilSimple size={16} />编辑</Button><Button variant="quiet" size="sm" onClick={() => archive(channel)} disabled={!channel.enabled}><Archive size={16} />停用</Button></div>
+      </article>;
+    })}</div> : <EmptyState icon={<PaperPlaneTilt size={34} />} title="还没有通知出口" description="从企业微信群机器人或 Bark 开始最简单，配置后先发送一条测试消息。" action={<Button onClick={startCreate}><Plus size={17} />添加第一个出口</Button>} />}
+
+    <DialogShell open={open} onOpenChange={setOpen} title={editing ? '编辑通知出口' : '添加通知出口'} description="密钥会在服务端加密保存，保存后不会在页面中明文显示。" size="lg" footer={<><Button variant="secondary" onClick={() => setOpen(false)}>取消</Button><Button type="submit" form="channel-form" disabled={saving}>{saving ? '正在保存…' : '保存出口'}<ArrowRight size={16} /></Button></>}>
+      <form id="channel-form" className="dialog-form" onSubmit={save}>
+        {!editing ? <div className="channel-type-picker">{types.map((value) => { const meta = channelMeta[value]; const Icon = meta.icon; return <button type="button" key={value} className={`channel-type-option ${type === value ? 'is-selected' : ''}`} onClick={() => chooseType(value)}><Icon size={23} weight="duotone" /><span><strong>{meta.short}</strong><small>{meta.description}</small></span>{type === value ? <Check size={18} weight="bold" /> : null}</button>; })}</div> : null}
+        <Field label="渠道名称" required><Input value={name} onChange={(event) => setName(event.target.value)} /></Field>
+        <ChannelFields type={type} config={config} setConfig={setConfig} editing={Boolean(editing)} />
+      </form>
+    </DialogShell>
+  </div>;
+}

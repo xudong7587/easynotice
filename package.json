@@ -1,0 +1,54 @@
+{
+  "name": "easynotice",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NAS unified notification ingress, routing and delivery manager",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "concurrently -n server,web -c cyan,green \"tsx watch server/index.ts\" \"vite --host 0.0.0.0\"",
+    "build": "npm run build:web && npm run build:server",
+    "build:web": "vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "check": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
+    "start": "node dist-server/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@base-ui/react": "latest",
+    "@phosphor-icons/react": "latest",
+    "bcryptjs": "latest",
+    "better-sqlite3": "latest",
+    "cookie-parser": "latest",
+    "express": "latest",
+    "helmet": "latest",
+    "multer": "latest",
+    "nanoid": "latest",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-router-dom": "latest",
+    "sonner": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "latest",
+    "@types/cookie-parser": "latest",
+    "@types/express": "latest",
+    "@types/multer": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@types/supertest": "latest",
+    "@vitejs/plugin-react": "latest",
+    "concurrently": "latest",
+    "jsdom": "latest",
+    "supertest": "latest",
+    "tsx": "latest",
+    "typescript": "latest",
+    "vite": "latest",
+    "vitest": "latest"
+  }
+}
