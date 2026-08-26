@@ -128,7 +128,7 @@ export function SourceDetailPage() {
       <div className="detail-main">
         <section className="panel section-block">
           <div className="panel__header"><div><h2>复制到原应用</h2><p>按照下面四项填写即可，不需要自行拼接参数。</p></div><StatusBadge status={source.lastReceivedAt ? 'success' : 'untested'} label={source.lastReceivedAt ? '入口正常' : '等待测试'} /></div>
-          <EndpointBlock source={source} />
+          <EndpointBlock source={source} recipe={recipe} />
           {recipe ? <div className="setup-steps setup-steps--compact"><h3>{recipe.name} 配置说明</h3>{recipe.steps.map((item, index) => <div key={item}><span>{index + 1}</span><p>{item}</p></div>)}{recipe.tips.map((tip) => <Callout key={tip}>{tip}</Callout>)}</div> : null}
           <div className="panel__footer"><Button variant="quiet" size="sm" onClick={regenerate}><Repeat size={16} />更换接口密钥</Button></div>
         </section>

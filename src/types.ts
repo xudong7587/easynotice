@@ -2,6 +2,17 @@ export type ChannelType = 'wecom_app' | 'wecom_robot' | 'telegram' | 'bark';
 export type RouteMode = 'failover' | 'broadcast';
 export type NoticeStatus = 'pending' | 'processing' | 'success' | 'partial' | 'failed';
 
+export interface RecipeWebhookTemplate {
+  id: string;
+  name: string;
+  summary: string;
+  location: string;
+  support: 'native' | 'scheduled' | 'unavailable';
+  bodyTemplate?: string;
+  note?: string;
+  defaultSelected?: boolean;
+}
+
 export interface Recipe {
   id: string;
   name: string;
@@ -15,6 +26,7 @@ export interface Recipe {
   steps: string[];
   tips: string[];
   searchTerms: string[];
+  webhookTemplates?: RecipeWebhookTemplate[];
 }
 
 export interface Channel {

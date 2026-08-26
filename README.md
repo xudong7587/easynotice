@@ -2,7 +2,7 @@
 
 EasyNotice 是一个面向 NAS 和家庭服务器的统一通知中心。它接收 Lucky、MDC-NG、Uptime Kuma、Watchtower 等应用发来的 Webhook，统一整理标题、正文、图片和链接，再按规则发送到企业微信、Telegram 或 Bark。
 
-当前稳定版本：[`v0.1.3`](https://github.com/xudong7587/easynotice/releases/tag/v0.1.3)
+当前稳定版本：[`v0.1.4`](https://github.com/xudong7587/easynotice/releases/tag/v0.1.4)
 
 普通用户只需要 Docker Compose，不需要安装 Node.js，也不需要下载源码后自行构建镜像。
 
@@ -135,6 +135,8 @@ http://192.168.11.239:18088
 6. 在入口详情发送“整链路测试”。
 7. 到“通知记录”查看识别结果和每次投递过程。
 
+选择 Lucky 入口时，可以直接勾选 DDNS、STUN、设备上下线或计划任务等场景；页面会分别生成可复制的 JSON，并注明应粘贴到 Lucky 的哪个位置。端口转发和 Web 服务仅能通过计划任务定时报告规则开关状态，不等同于真实可用性检测。Lucky 当前没有原生的证书续签完成 Webhook，因此 EasyNotice 会明确标为不可直接配置，而不会生成虚假的开箱即用模板。
+
 ## 通知出口怎么选
 
 ### 企业微信群机器人
@@ -202,7 +204,7 @@ docker compose ps
 把 Compose 中的镜像标签从 `latest` 改为固定版本：
 
 ```yaml
-image: ghcr.io/xudong7587/easynotice:v0.1.3
+image: ghcr.io/xudong7587/easynotice:v0.1.4
 ```
 
 再执行：

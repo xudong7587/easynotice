@@ -1,3 +1,14 @@
+export interface RecipeWebhookTemplate {
+  id: string;
+  name: string;
+  summary: string;
+  location: string;
+  support: 'native' | 'scheduled' | 'unavailable';
+  bodyTemplate?: string;
+  note?: string;
+  defaultSelected?: boolean;
+}
+
 export interface Recipe {
   id: string;
   name: string;
@@ -11,6 +22,7 @@ export interface Recipe {
   steps: string[];
   tips: string[];
   searchTerms: string[];
+  webhookTemplates?: RecipeWebhookTemplate[];
 }
 
 export const recipes: Recipe[] = [
@@ -29,12 +41,116 @@ export const recipes: Recipe[] = [
   "event": "ip_changed"
 }`,
     steps: [
-      '在 Lucky 的 Webhook 设置中粘贴接口地址。',
+      '先勾选要接入的通知场景，再按生成卡片标注的位置进入 Lucky 的 Webhook 或 CallWeb 设置。',
+      '粘贴同一个 EasyNotice 接口地址；不同场景只需要更换各自的请求体。',
       '请求方法选择 POST，请求头填写 application/json。',
-      '把提供的请求体完整粘贴进去，然后保存并测试。',
+      '把对应 JSON 完整粘贴到请求体；“接口调用成功包含的字符串”填写 success，然后保存并测试。',
     ],
-    tips: ['Lucky 的 {time}、{ipAddr} 等变量会在发送时自动替换。'],
+    tips: [
+      'DDNS 中可直接使用 {time}、{ipAddr}；STUN 的局部变量建议保留 #{变量名} 写法。端口转发和 Web 服务状态只能通过计划任务定时报告，并不代表目标服务真实可用。',
+      '如果 Lucky 持续弹出 connection refused，请在所有 DDNS/STUN 任务及全局 WebHook 中查找旧地址，替换或关闭旧配置；只关闭错误弹窗不会停止重试。',
+    ],
     searchTerms: ['lucky', '公网ip', 'ddns', '软路由'],
+    webhookTemplates: [
+      {
+        id: 'ddns_changed',
+        name: 'DDNS / 公网 IP 变化',
+        summary: '公网地址发生变化并完成 DDNS 同步时发送。',
+        location: '动态域名 → DDNS 任务 → 编辑 → Webhook',
+        support: 'native',
+        defaultSelected: true,
+        bodyTemplate: `{
+  "title": "公网IP更新",
+  "content": "在{time}更新为{ipAddr}",
+  "event": "ip_changed"
+}`,
+      },
+      {
+        id: 'stun_changed',
+        name: 'STUN 公网地址变化',
+        summary: 'STUN 穿透得到的公网 IP 或端口变化时发送。',
+        location: 'STUN 内网穿透 → 穿透规则 → 编辑 → Webhook，或 STUN 设置 → 全局 Webhook',
+        support: 'native',
+        bodyTemplate: `{
+  "title": "STUN地址更新",
+  "content": "在#{time}，#{ruleName}更新为#{ipAddr}",
+  "event": "stun_changed"
+}`,
+      },
+      {
+        id: 'device_online',
+        name: '设备上线',
+        summary: 'Lucky 检测到指定网络唤醒设备上线时发送。',
+        location: '网络唤醒 → 对应设备 → 上下线 Webhook（具体位置随 Lucky 版本不同）',
+        support: 'native',
+        note: '复制后把“设备名称”替换成 NAS、电脑等实际名称。',
+        bodyTemplate: `{
+  "title": "设备名称已上线",
+  "content": "{NowDatetime}：设备名称已经上线",
+  "event": "device_online"
+}`,
+      },
+      {
+        id: 'device_offline',
+        name: '设备离线',
+        summary: 'Lucky 检测到指定网络唤醒设备离线时发送。',
+        location: '网络唤醒 → 对应设备 → 上下线 Webhook（具体位置随 Lucky 版本不同）',
+        support: 'native',
+        note: '复制后把“设备名称”替换成 NAS、电脑等实际名称。',
+        bodyTemplate: `{
+  "title": "设备名称已离线",
+  "content": "{NowDatetime}：设备名称已经离线，请检查网络或电源",
+  "event": "device_offline"
+}`,
+      },
+      {
+        id: 'cron_result',
+        name: '计划任务执行结果',
+        summary: '先运行脚本或其他子任务，再由 CallWeb 发送其执行结果。',
+        location: '计划任务 → 新建或编辑任务 → 在被报告任务后添加 CallWeb',
+        support: 'scheduled',
+        note: '把“任务名称”改成真实名称；末尾 1 代表第一个子任务。',
+        bodyTemplate: `{
+  "title": "计划任务完成",
+  "content": "{NowDatetime}：{CRON_任务名称_1}",
+  "event": "cron_result"
+}`,
+      },
+      {
+        id: 'port_forward_status',
+        name: '端口转发状态报告',
+        summary: '通过计划任务定时报告规则开关状态，不是端口故障事件。',
+        location: '计划任务 → 添加 CallWeb，并设置需要的执行周期',
+        support: 'scheduled',
+        note: '把“规则名”改成端口转发中的真实规则名称；on 只表示规则已开启。',
+        bodyTemplate: `{
+  "title": "端口转发状态",
+  "content": "{NowDatetime}：规则状态为{PF_规则名_STATUS}",
+  "event": "port_forward_status"
+}`,
+      },
+      {
+        id: 'web_service_status',
+        name: 'Web 服务状态报告',
+        summary: '通过计划任务定时报告 Lucky Web 规则开关状态。',
+        location: '计划任务 → 添加 CallWeb，并设置需要的执行周期',
+        support: 'scheduled',
+        note: '把主规则名、子规则名替换成 Lucky 中完全一致的名称。',
+        bodyTemplate: `{
+  "title": "Web服务状态",
+  "content": "{NowDatetime}：反向代理状态为{WEB_主规则名_子规则名_STATUS}",
+  "event": "web_service_status"
+}`,
+      },
+      {
+        id: 'certificate_renewal',
+        name: '证书续签结果',
+        summary: 'Lucky 当前没有可直接复制使用的原生续签完成 Webhook。',
+        location: 'SSL 证书模块',
+        support: 'unavailable',
+        note: '只有自行编写证书检查脚本后，才能通过计划任务 CallWeb 发送脚本结果。',
+      },
+    ],
   },
   {
     id: 'mdc-ng',
