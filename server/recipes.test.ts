@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getRecipe, recipes } from './recipes.js';
+import { getRecipe, inferLegacyRecipeId, recipes } from './recipes.js';
 
 describe('Lucky recipe webhook templates', () => {
   it('提供可复制的原生与计划任务模板，并明确排除伪造的证书回调', () => {
@@ -29,5 +29,12 @@ describe('Lucky recipe webhook templates', () => {
       name: '影视库中枢',
     });
     expect(getRecipe('missing-recipe').id).toBe('generic');
+  });
+
+  it('把旧版通用 OpenWrt 入口识别为 PushBot 专用入口', () => {
+    expect(inferLegacyRecipeId('OpenWrt / iStoreOS', 'generic')).toBe('openwrt-istoreos');
+    expect(inferLegacyRecipeId('全能推送', 'generic')).toBe('openwrt-istoreos');
+    expect(inferLegacyRecipeId('普通 Webhook', 'generic')).toBe('generic');
+    expect(inferLegacyRecipeId('OpenWrt', 'lucky')).toBe('lucky');
   });
 });

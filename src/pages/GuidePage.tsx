@@ -33,7 +33,7 @@ export function GuidePage() {
     <section className="panel section-block faq-list"><div className="panel__header"><div><h2>常见问题</h2><p>遇到问题时先看通知记录，那里会显示具体失败在哪一步。</p></div></div>
       <details open><summary>原应用只有一个 URL 输入框，没有请求头和请求体怎么办？</summary><p>直接粘贴 EasyNotice 的接口地址。它同时支持 GET 查询参数、表单和纯文本。能选择 JSON 时优先选择 JSON；无法选择也可以先发送一次测试，再到通知记录查看 EasyNotice 实际收到了什么。</p></details>
       <details><summary>固定地址会不会泄露？</summary><p>每个入口地址都含有高强度随机密钥，无法靠项目名猜出。不要把完整地址发到公开论坛；怀疑泄露时，可以在入口详情中更换接口密钥，旧地址会立即失效。</p></details>
-      <details><summary>图片为什么在某些渠道看起来不同？</summary><p>Telegram 可以直接发送图片文件；企业微信机器人可以先发图片再发文字；企微图文和 Bark 图标需要公网可访问的图片 URL。EasyNotice 会根据渠道能力自动选择，不会假装所有平台完全一致。</p></details>
+      <details><summary>图片为什么在某些渠道看起来不同？</summary><p>Telegram 可以直接发送图片文件，企业微信应用可以上传素材并生成图文；企业微信群机器人固定发送纯文字，Bark 的远程图标需要公网可访问的图片 URL。EasyNotice 会根据渠道能力选择合适格式。</p></details>
       <details><summary>除了 Webhook，还考虑过哪些入口？</summary><p>当前版本把 HTTP Webhook 做成稳定核心，同时兼容 GET API、表单和纯文本。后续可在不改变现有地址的前提下增加 MQTT、SMTP 邮件接收和日志/Syslog 适配器。它们都会先进入同一套标准通知模型。</p></details>
       <details><summary>AI 配置助手会自动改动我的 Docker 吗？</summary><p>不会。AI 只把项目说明或截图翻译成建议，结果必须由你确认。核心接入和发送完全不依赖 AI，即使 API Key 失效，已有通知仍正常工作。</p></details>
     </section>

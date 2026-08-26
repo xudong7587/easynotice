@@ -16,7 +16,7 @@ export const channelMeta: Record<ChannelType, {
   wecom_robot: {
     name: '企业微信群机器人',
     short: '企微机器人',
-    description: '只需机器人 Key，EasyNotice 自动发送文字、图片或图文。',
+    description: '只需机器人 Key，固定发送清晰可靠的纯文字消息。',
     icon: WechatLogo,
   },
   telegram: {

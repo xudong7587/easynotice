@@ -106,37 +106,6 @@ async function postWeComRobot(url: string, payload: unknown): Promise<DeliveryRe
 
 async function deliverWeComRobot(config: WeComRobotConfig, notice: NoticeForDelivery): Promise<DeliveryResult> {
   const url = ensureHttpUrl(config.webhookUrl, '机器人 Webhook').toString();
-
-  if (notice.imageAssetPath && fs.existsSync(notice.imageAssetPath)) {
-    if (!notice.imageAssetUrl) {
-      throw new Error('企业微信机器人图文消息需要先在系统设置中填写可公网访问的 EasyNotice 外部地址');
-    }
-    return postWeComRobot(url, {
-      msgtype: 'news',
-      news: {
-        articles: [{
-          title: notice.title.slice(0, 128),
-          description: notice.body.slice(0, 512),
-          url: notice.linkUrl || notice.imageAssetUrl,
-          picurl: notice.imageAssetUrl,
-        }],
-      },
-    });
-  } else if (notice.imageUrl) {
-    await postWeComRobot(url, {
-      msgtype: 'news',
-      news: {
-        articles: [{
-          title: notice.title.slice(0, 128),
-          description: notice.body.slice(0, 512),
-          url: notice.linkUrl || notice.imageUrl,
-          picurl: notice.imageUrl,
-        }],
-      },
-    });
-    return { httpStatus: 200, responseExcerpt: '图文消息发送成功' };
-  }
-
   return postWeComRobot(url, {
     msgtype: 'text',
     text: {

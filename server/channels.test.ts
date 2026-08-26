@@ -121,7 +121,7 @@ describe('企业微信机器人投递', () => {
     });
   });
 
-  it('自动将公网图片发送为图文卡片', async () => {
+  it('有公网图片时仍然只发送文字', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ errcode: 0, errmsg: 'ok' }), { status: 200 }),
     );
@@ -133,12 +133,12 @@ describe('企业微信机器人投递', () => {
 
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect(JSON.parse(String(request.body))).toMatchObject({
-      msgtype: 'news',
-      news: { articles: [{ picurl: 'https://example.com/poster.jpg' }] },
+      msgtype: 'text',
+      text: { content: expect.stringContaining('测试通知') },
     });
   });
 
-  it('使用带签名的本地素材地址发送单条图文卡片', async () => {
+  it('有本地素材时仍然只发送文字', async () => {
     const imagePath = path.join(os.tmpdir(), `easynotice-robot-news-${Date.now()}.png`);
     fs.writeFileSync(imagePath, Buffer.from('test-image'));
     const fetchMock = vi.fn().mockResolvedValue(
@@ -162,8 +162,8 @@ describe('企业微信机器人投递', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect(JSON.parse(String(request.body))).toMatchObject({
-      msgtype: 'news',
-      news: { articles: [{ picurl: 'https://notice.example/media/asset/signature' }] },
+      msgtype: 'text',
+      text: { content: expect.stringContaining('测试通知') },
     });
   });
 });

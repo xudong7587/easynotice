@@ -149,11 +149,11 @@ router.post('/:id/test', async (request, response, next) => {
         sourceName: notice.sourceName,
         title: notice.title,
         eventType: notice.eventType,
-        hasImage: Boolean(notice.imageAssetPath || notice.imageUrl),
+        hasImage: row.type !== 'wecom_robot' && Boolean(notice.imageAssetPath || notice.imageUrl),
       },
     });
   } catch (error) {
-    const message = redactSensitiveText(error instanceof Error ? error.message : '图文预览发送失败');
+    const message = redactSensitiveText(error instanceof Error ? error.message : '消息预览发送失败');
     db.prepare(`UPDATE channels SET last_status = 'failed', last_error = ?, updated_at = ? WHERE id = ?`)
       .run(message.slice(0, 800), Date.now(), row.id);
     next(Object.assign(new Error(message), { statusCode: 502 }));

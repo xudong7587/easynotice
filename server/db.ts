@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import Database from 'better-sqlite3';
 import { dbPath } from './config.js';
 import { encryptSecret, encryptStoredData, isEncryptedPayload } from './crypto.js';
+import { inferLegacyRecipeId } from './recipes.js';
 import { redactSensitiveText } from './security.js';
 
 export const db = new Database(dbPath);
@@ -149,6 +150,16 @@ function protectDatabaseFiles(): void {
   }
 }
 
+const migrateLegacySourceRecipes = db.transaction(() => {
+  const sources = db.prepare("SELECT id, name, recipe_id FROM sources WHERE recipe_id = 'generic'")
+    .all() as Array<{ id: string; name: string; recipe_id: string }>;
+  const update = db.prepare('UPDATE sources SET recipe_id = ?, updated_at = ? WHERE id = ?');
+  for (const source of sources) {
+    const recipeId = inferLegacyRecipeId(source.name, source.recipe_id);
+    if (recipeId !== source.recipe_id) update.run(recipeId, Date.now(), source.id);
+  }
+});
+
 const protectLegacyPayloads = db.transaction(() => {
   const events = db.prepare("SELECT id, raw_json FROM events WHERE raw_json NOT LIKE 'v1.%'")
     .all() as Array<{ id: string; raw_json: string }>;
@@ -167,6 +178,7 @@ const protectLegacyPayloads = db.transaction(() => {
   }
 });
 
+migrateLegacySourceRecipes();
 protectLegacyPayloads();
 protectDatabaseFiles();
 

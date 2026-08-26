@@ -123,7 +123,7 @@ describe('webhook integration', () => {
 
     expect(preview).toMatchObject({
       sourceName: 'Lucky 主路由',
-      title: '公网 IP 已更新',
+      title: '【测试】公网 IP 已更新',
       eventType: 'ddns_changed',
       imageAssetUrl: 'http://nas.local:18088/notification-preview.png',
       imageMimeType: 'image/png',
@@ -153,7 +153,7 @@ describe('webhook integration', () => {
 
     const { buildChannelPreview } = await import('./preview.js');
     const preview = buildChannelPreview(String(created.body.source.id), 'http://nas.local:18088');
-    expect(preview?.title).toBe('家庭网络：新设备接入网络');
+    expect(preview?.title).toBe('家庭网络：【测试】新设备接入网络');
     expect(preview?.imageAssetUrl).toContain(`/media/${uploaded.body.asset.id}/`);
     expect(preview?.imageAssetUrl).not.toContain('notification-preview.png');
     expect(fs.existsSync(preview!.imageAssetPath!)).toBe(true);

@@ -311,3 +311,8 @@ export const recipes: Recipe[] = [
 export function getRecipe(id: string): Recipe {
   return recipes.find((recipe) => recipe.id === id) ?? recipes.find((recipe) => recipe.id === 'generic')!;
 }
+
+export function inferLegacyRecipeId(name: string, recipeId: string): string {
+  if (recipeId !== 'generic') return recipeId;
+  return /openwrt|istore\s*os|pushbot|全能推送/i.test(name) ? 'openwrt-istoreos' : recipeId;
+}
