@@ -1,170 +1,358 @@
 # EasyNotice
 
-EasyNotice 是面向 NAS 用户的统一通知 Docker。它把不同容器发来的 Webhook 先转换成同一种通知格式，再按你设置的顺序发送到企业微信应用、企业微信群机器人、Telegram 或 Bark。
+EasyNotice 是一个面向 NAS 和家庭服务器的统一通知中心。它接收 Lucky、MDC-NG、Uptime Kuma、Watchtower 等应用发来的 Webhook，统一整理标题、正文、图片和链接，再按规则发送到企业微信、Telegram 或 Bark。
 
-核心目标不是增加更多配置项，而是让不熟悉 Webhook 的用户也能完成三件事：
+当前稳定版本：[`v0.1.2`](https://github.com/xudong7587/easynotice/releases/tag/v0.1.2)
 
-1. 选择原应用，复制 EasyNotice 给出的地址、请求方法、内容类型和请求体。
-2. 先测试单个通知出口，再选择“全部发送”或“失败后补位”。
-3. 在通知记录中明确看到收到什么、命中哪条规则、在哪个渠道失败、最终是否由备用渠道送达。
+普通用户只需要 Docker Compose，不需要安装 Node.js，也不需要下载源码后自行构建镜像。
 
-## 已实现
+## 它能做什么
 
-- Lucky、MDC-NG、Uptime Kuma、Watchtower / Shoutrrr 和通用 Webhook 预设
-- `POST`、`GET`、JSON、表单和纯文本入口
-- 常见字段自动识别：`title`、`subject`、`content`、`body`、`message`、`poster`、`thumb`、`url` 等
-- 每个入口使用独立随机密钥，可随时更换
-- 企业微信应用、企业微信群机器人、Telegram Bot、Bark 出口
-- 失败后自动补位，例如“企微应用 -> 企微群机器人”
-- 全部渠道同时发送
-- SQLite 持久队列，服务重启后恢复未完成事件
-- 每个入口可配置多条图片和模板规则
-- 本地图片素材库
-- 逐次投递记录、失败原因、整链路测试和手动重试
-- 首次启动向导、内置新手指南、深色模式和手机布局
-- 可选 OpenAI 兼容 AI 助手，通过项目名称或截图生成待确认的接入建议
-- 管理密码、HttpOnly 会话、AES-256-GCM 密钥加密
+- 接收 `POST`、`GET`、JSON、表单和纯文本 Webhook
+- 内置 Lucky、MDC-NG、Uptime Kuma、Watchtower / Shoutrrr 和通用 Webhook 预设
+- 自动识别 `title`、`subject`、`content`、`body`、`message`、`poster`、`thumb`、`url` 等常见字段
+- 发送到企业微信应用、企业微信群机器人、Telegram Bot 和 Bark
+- 支持“全部发送”和“主渠道失败后备用渠道补位”
+- 按通知内容匹配标题、正文、图片和链接规则
+- 保存每一次接收、匹配、重试和投递结果
+- SQLite 持久队列，容器重启后继续处理未完成通知
+- 管理密码、HttpOnly 会话和 AES-256-GCM 密钥加密
+- 首次启动向导、出口配置引导、深色模式和手机布局
 
-## 推荐部署：GitHub 自动构建镜像
-
-不需要在 NAS 或本机执行 `docker build`。推荐把仓库命名为 `easynotice` 并推送到 GitHub：
-
-1. `.github/workflows/ci.yml` 会执行类型检查、测试和生产构建。
-2. `.github/workflows/publish-image.yml` 会在推送到 `main` 后再次通过检查，再构建 `linux/amd64` 和 `linux/arm64`；检查失败不会发布镜像。
-3. 镜像自动发布为 `ghcr.io/xudong7587/easynotice:latest`。
-4. 打开 GitHub 仓库的 Packages 页面。如果希望 NAS 免登录拉取，把该 Package 的可见性设置为 Public。
-5. 复制 `.env.example` 为 `.env`，把镜像地址改成自己的地址。
-
-官方 Compose 只拉取公开的独立镜像，不依赖源码目录、Node.js 或开发电脑。服务在容器内明确监听 `0.0.0.0:18088`，宿主机端口也明确绑定到 `0.0.0.0`，默认通过 NAS 的 `18088` 端口向全部 IPv4 局域网网卡开放。可以在 `.env` 中用 `EASYNOTICE_PORT` 修改 NAS 侧端口。
-
-```bash
-cp .env.example .env
-docker compose pull
-docker compose up -d
-```
-
-以后更新：
-
-```bash
-docker compose pull
-docker compose up -d
-```
-
-如果 GHCR Package 保持私有，需要先在 NAS 登录：
-
-```bash
-echo "你的GitHub PAT" | docker login ghcr.io -u 你的GitHub用户名 --password-stdin
-```
-
-PAT 只需要 `read:packages` 权限。
-
-## 本地构建（仅开发时需要）
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
-```
-
-部署后打开：
+通知链路可以简单理解为：
 
 ```text
-http://你的NAS地址:18088
+原应用 → EasyNotice Webhook → 内容识别与规则 → 主备路由 → 企微 / Telegram / Bark
 ```
 
-### 反代能打开、局域网 IP 却打不开
+## 推荐部署：Docker Compose
 
-先在地址栏明确输入 `http://NAS局域网IP:18088/health`，不要写成 `https://`。如果外网反向代理正常，说明 EasyNotice 进程和网页通常都已经启动；此时最常见的是旧容器尚未重建、宿主机端口只监听回环地址，或 NAS 防火墙阻止局域网直接访问该端口。
+这是普通用户的推荐部署方式。官方镜像同时支持 `linux/amd64` 和 `linux/arm64`。
 
-先在 NAS 的终端依次检查：
+NAS 有终端时，可以直接下载仓库中的最新版 Compose 和环境变量示例：
+
+```bash
+mkdir -p easynotice
+cd easynotice
+curl -fsSL https://raw.githubusercontent.com/xudong7587/easynotice/main/docker-compose.yml -o docker-compose.yml
+curl -fsSL https://raw.githubusercontent.com/xudong7587/easynotice/main/.env.example -o .env
+```
+
+下载完成后，可以直接跳到下面的“3. 启动”。使用 NAS 图形界面或希望手工核对配置时，按接下来的两步创建文件。
+
+### 1. 创建 Compose 项目
+
+在 NAS 上新建一个 `easynotice` 文件夹，在里面保存下面的内容为 `docker-compose.yml`：
+
+```yaml
+services:
+  easynotice:
+    image: ${EASYNOTICE_IMAGE:-ghcr.io/xudong7587/easynotice:latest}
+    container_name: easynotice
+    restart: unless-stopped
+    ports:
+      - "${EASYNOTICE_BIND_IP:-0.0.0.0}:${EASYNOTICE_PORT:-18088}:18088"
+    environment:
+      TZ: Asia/Shanghai
+      HOST: 0.0.0.0
+      PORT: 18088
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18088/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+```
+
+仓库中的 [`docker-compose.yml`](./docker-compose.yml) 就是当前维护中的官方版本。建议优先使用仓库文件，README 里的内容用于直接复制和核对。
+
+### 2. 创建 `.env`
+
+在同一文件夹保存下面的内容为 `.env`：
+
+```dotenv
+EASYNOTICE_IMAGE=ghcr.io/xudong7587/easynotice:latest
+EASYNOTICE_PORT=18088
+EASYNOTICE_BIND_IP=0.0.0.0
+```
+
+三个变量的作用：
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `EASYNOTICE_IMAGE` | `ghcr.io/xudong7587/easynotice:latest` | 要部署的镜像版本 |
+| `EASYNOTICE_PORT` | `18088` | NAS 对局域网开放的端口 |
+| `EASYNOTICE_BIND_IP` | `0.0.0.0` | 监听 NAS 的全部 IPv4 网卡，局域网访问时不要改成 `127.0.0.1` |
+
+想固定版本、不随 `latest` 更新时，可以改为：
+
+```dotenv
+EASYNOTICE_IMAGE=ghcr.io/xudong7587/easynotice:v0.1.2
+```
+
+### 3. 启动
+
+在 `docker-compose.yml` 所在目录执行：
+
+```bash
+docker compose pull
+docker compose up -d
+docker compose ps
+```
+
+正常时，`docker compose ps` 会显示容器正在运行，端口类似：
+
+```text
+0.0.0.0:18088->18088/tcp
+```
+
+然后打开：
+
+```text
+http://你的NAS局域网IP:18088
+```
+
+例如：
+
+```text
+http://192.168.11.239:18088
+```
+
+### NAS 图形界面部署
+
+群晖 Container Manager、威联通 Container Station、Portainer 和其他支持 Compose/Stack 的管理工具都可以使用同一份配置：
+
+1. 新建 Compose 项目或 Stack。
+2. 粘贴上面的 `docker-compose.yml`。
+3. 添加三个环境变量，或同时上传 `.env`。
+4. 确认项目目录中的 `./data` 会挂载到容器 `/app/data`。
+5. 部署项目，等待健康状态变为正常。
+6. 用 `http://NAS局域网IP:18088` 打开管理页面。
+
+不建议在 NAS 图形界面中手工逐项创建一个普通容器。Compose 能完整保留端口、数据目录、健康检查和重启策略，后续更新也更容易复现。
+
+## 首次使用
+
+第一次打开管理页面时：
+
+1. 创建至少 8 位的管理密码。
+2. 填写“其他容器访问 EasyNotice 的地址”。
+3. 这个地址应使用其他容器能访问的 NAS IP，例如 `http://192.168.11.239:18088`，不要填写 `localhost`。
+
+接下来建议按这个顺序跑通第一条通知：
+
+1. 打开“通知出口”，添加企业微信群机器人或 Bark。
+2. 按页面里的逐步引导取得 Webhook、Token、Chat ID 或 Bark Key。
+3. 保存出口后点击“发送测试”。
+4. 打开“通知入口”，选择原应用预设或通用 Webhook。
+5. 把 EasyNotice 生成的地址、请求方式、内容类型和请求体复制到原应用。
+6. 在入口详情发送“整链路测试”。
+7. 到“通知记录”查看识别结果和每次投递过程。
+
+## 通知出口怎么选
+
+### 企业微信群机器人
+
+配置最简单，只需要群聊中生成的完整 Webhook 地址，适合先跑通通知，也适合作为企微应用的备用渠道。
+
+新版企业微信通常在目标内部群的“消息推送 → 自定义消息推送”中创建；旧版客户端中可能显示为“群机器人 → 添加机器人”。EasyNotice 的添加出口弹窗中有完整步骤和字段对照。
+
+### 企业微信应用
+
+适合向指定成员或部门发送应用消息，需要：
+
+- 企业 ID（CorpID）
+- 自建应用的 AgentId
+- 自建应用的 Secret
+- 接收成员账号或部门 ID
+- 正确配置企业可信 IP
+
+企业可信 IP 应填写 NAS 访问互联网时使用的公网出口 IP，不是 `192.168.x.x` 局域网地址。如果公网 IP 经常变化，推荐同时添加群机器人作为备用出口。
+
+### Telegram Bot
+
+需要在官方 `@BotFather` 创建 Bot，再取得目标私聊、群组或频道的 Chat ID。中国大陆网络无法直连 Telegram API 时，可以填写自己可信的 API 反向代理地址，不要使用来历不明的公共代理。
+
+### Bark
+
+适合推送到个人 iPhone。可以把 Bark 首页显示的完整测试地址直接粘贴到“Bark Key”，EasyNotice 会自动拆分服务器地址和设备 Key。
+
+还可以设置通知分组、铃声和时效级别。远程图片图标必须能被 Bark 服务器从公网访问，本地上传素材不能直接充当 Bark 图标。
+
+## 企业微信主备补位
+
+推荐顺序：
+
+1. 添加并测试“企业微信应用”。
+2. 添加并测试“企业微信群机器人”。
+3. 在通知入口详情选择“失败后补位”。
+4. 把企微应用排在顺位 1。
+5. 把群机器人排在顺位 2。
+
+每条通知会先尝试企微应用。重试后仍失败，EasyNotice 会自动尝试群机器人，并在通知记录中保留两边的结果。
+
+## 更新、固定版本和回退
+
+### 更新 `latest`
+
+进入 Compose 项目目录执行：
 
 ```bash
 docker compose pull
 docker compose up -d --force-recreate
 docker compose ps
-docker port easynotice 18088
-curl http://127.0.0.1:18088/health
 ```
 
-正常时应看到类似 `0.0.0.0:18088->18088/tcp` 或 `0.0.0.0:18088` 的端口映射，并收到包含 `"status":"ok"` 的健康检查结果。若 `docker compose ps` 显示的不是 `0.0.0.0`，检查正在使用的 Compose 文件和 `.env`：
+`docker compose restart` 不会拉取新镜像，更新时不要只执行 restart。
+
+### 固定到某个版本
+
+在 `.env` 中设置固定标签：
 
 ```dotenv
-EASYNOTICE_PORT=18088
-EASYNOTICE_BIND_IP=0.0.0.0
+EASYNOTICE_IMAGE=ghcr.io/xudong7587/easynotice:v0.1.2
 ```
 
-如果 NAS 本机的 `curl` 成功，但同一局域网设备访问 `http://192.168.11.239:18088/health` 失败，问题已经位于 EasyNotice 容器之外。请在 NAS 防火墙或安全套件中允许来源局域网（例如 `192.168.11.0/24`）访问 TCP `18088`，并检查访客 Wi-Fi、AP 隔离、VLAN 或路由访问控制。反向代理仍能工作并不能排除这种情况，因为反向代理通常从 NAS 本机回环地址或 Docker 内部网络访问容器，不会经过局域网入站防火墙。
+再执行：
 
-如果 NAS 本机的 `curl` 也失败，查看容器状态和日志：
+```bash
+docker compose pull
+docker compose up -d --force-recreate
+```
+
+所有已发布版本都在 [GitHub Releases](https://github.com/xudong7587/easynotice/releases) 中。
+
+### 回退
+
+把 `.env` 中的镜像标签改回上一个版本，再重新拉取并创建容器：
+
+```bash
+docker compose pull
+docker compose up -d --force-recreate
+```
+
+回退前建议先备份 `data`。新版数据库如果发生结构升级，旧版程序不一定能够读取。
+
+## 数据目录与备份
+
+默认挂载：
+
+```yaml
+volumes:
+  - ./data:/app/data
+```
+
+也就是说，数据保存在 Compose 项目目录的 `data` 文件夹：
+
+```text
+data/
+├── easynotice.db
+├── .installation-secret
+└── uploads/
+```
+
+- `easynotice.db`：设置、入口、规则、队列和通知记录
+- `.installation-secret`：本机加密主密钥
+- `uploads/`：上传的通知图片素材
+
+备份时必须复制整个 `data` 文件夹。只备份数据库而漏掉 `.installation-secret`，已经保存的企微 Secret、Bot Token 和其他加密配置将无法解密。
+
+为了得到一致的 SQLite 备份，建议短暂停止服务后再复制：
+
+```bash
+docker compose stop
+tar -czf easynotice-data-backup.tar.gz data
+docker compose start
+```
+
+容器启动时会创建 `uploads`、修复默认绑定目录的所有权，然后降权为 UID 1000 的 `node` 用户运行，不需要执行 `chmod 777`。
+
+如果 `data` 位于不允许修改所有权的 NFS、SMB 或特殊共享存储，请为 UID 1000 预先授予读写权限，或改用 Docker 命名卷。
+
+## 健康检查与局域网排障
+
+### 1. 检查容器和端口
 
 ```bash
 docker compose ps
+docker port easynotice 18088
 docker compose logs --tail=100 easynotice
 ```
 
-端口被占用时容器通常无法启动；数据目录权限或数据库启动失败也会直接出现在日志里。
-
-首次进入会要求：
-
-- 创建至少 8 位的管理密码
-- 确认其他容器能够访问的 EasyNotice 地址，例如 `http://192.168.1.10:18088`
-
-数据默认保存在项目目录的 `./data`，其中包含：
-
-- `easynotice.db`：设置、入口、规则和通知记录
-- `.installation-secret`：本机加密主密钥
-- `uploads/`：通知图片素材
-
-请把整个 `data` 目录一起备份。只备份数据库而漏掉 `.installation-secret`，已保存的企微 Secret、Bot Token 等内容将无法解密。
-
-### NAS 挂载目录权限
-
-容器启动时会检查 `/app/data`，为宿主机挂载目录创建 `uploads` 并修复所有权，然后立即降权为 UID 1000 的 `node` 用户运行 EasyNotice。因此直接使用默认的 `./data:/app/data` 即可，不需要执行 `chmod 777`。
-
-如果数据目录位于禁止修改所有权的 NFS、SMB 或特殊共享存储上，请改用 Docker 命名卷，或在 NAS 上预先为 UID 1000 授予读写权限。
-
-## 推荐的第一次配置
-
-1. 在“通知出口”中添加企业微信群机器人或 Bark。
-2. 点击“发送测试”，确认手机或群聊已经收到。
-3. 在“通知入口”中选择 Lucky、MDC-NG 或通用 Webhook。
-4. 把生成的四项内容复制到原应用。
-5. 从入口详情发送“整链路测试”。
-6. 打开“通知记录”，确认识别结果和投递过程。
-
-## 企业微信主备补位
-
-企业微信应用获取 Token 时可能受到企业可信 IP 限制。公网 IP 变化后，企微应用可能先返回鉴权失败。
-
-EasyNotice 的推荐配置是：
-
-1. 添加“企业微信应用”。
-2. 添加“企业微信群机器人”。
-3. 在通知入口详情中选择“失败后补位”。
-4. 把企业微信应用排在顺位 1。
-5. 把群机器人排在顺位 2。
-
-每条消息会先尝试企微应用，失败后重试一次，再自动尝试群机器人。通知记录会保留两边的结果。
-
-## Bark 简介
-
-Bark 是面向 iPhone 的推送工具。打开 Bark 后会看到类似下面的个人推送地址：
+正常端口映射应包含：
 
 ```text
-https://api.day.app/你的设备Key/
+0.0.0.0:18088
 ```
 
-在 EasyNotice 中添加 Bark 时填写：
+如果显示 `127.0.0.1:18088`，检查 `.env` 是否错误设置了：
 
-- Bark Key：可直接粘贴 Bark 首页的完整测试地址，EasyNotice 会自动拆分；手工填写时使用服务器域名后的第一段设备 Key
-- Bark 服务器：默认 `https://api.day.app`，也可以填写自建服务
-- 分组：例如 `EasyNotice`
-- 通知铃声：可选，例如 `minuet`
-- 时效级别：普通、时效通知或静默
+```dotenv
+EASYNOTICE_BIND_IP=127.0.0.1
+```
 
-EasyNotice 会发送标题、正文、分组、点击链接和公网图片图标。本地上传的图片不能直接充当 Bark `icon`，因为 Bark 服务必须能够从公网访问图片地址。
+局域网部署应改回：
 
-## 通用入口
+```dotenv
+EASYNOTICE_BIND_IP=0.0.0.0
+```
 
-推荐 JSON：
+然后强制重建容器：
+
+```bash
+docker compose up -d --force-recreate
+```
+
+### 2. 在 NAS 本机测试
+
+```bash
+curl http://127.0.0.1:18088/health
+```
+
+正常会返回：
+
+```json
+{
+  "status": "ok",
+  "service": "easynotice"
+}
+```
+
+### 3. 从局域网设备测试
+
+```text
+http://192.168.11.239:18088/health
+```
+
+如果 NAS 本机健康检查成功，但局域网设备打不开，问题已经位于 EasyNotice 容器之外。请检查：
+
+- NAS 系统防火墙或安全套件是否允许 TCP `18088`
+- 防火墙规则是否允许来源网段，例如 `192.168.11.0/24`
+- 手机或电脑是否连接了访客 Wi-Fi
+- 路由器是否启用了 AP 隔离、VLAN 隔离或访问控制
+- NAS 是否有多个网卡，而访问的 IP 并不是当前有效地址
+
+“外网反向代理能打开，但 `192.168.11.239:18088` 打不开”通常也是这个原因。反向代理可能从 NAS 本机回环地址或 Docker 内部网络访问容器，不会经过局域网入站防火墙。
+
+## 反向代理
+
+EasyNotice 不要求公网访问。只在局域网使用时，直接访问 NAS IP 即可。
+
+需要反向代理时建议：
+
+- 使用 HTTPS
+- 将代理目标指向 `http://127.0.0.1:18088` 或 Docker 网络中的 EasyNotice
+- 传递正确的 `Host`、`X-Forwarded-Host` 和 `X-Forwarded-Proto`
+- 在 Compose 的 `environment` 中增加 `EASYNOTICE_COOKIE_SECURE: "true"`
+- 不要公开 Webhook 密钥、机器人地址、Bot Token 和管理密码
+
+注意：“其他容器访问 EasyNotice 的地址”必须真的能被那些容器访问。如果公网域名在内网不能回环，仍应填写 NAS 局域网地址。
+
+## 通用 Webhook
+
+推荐发送 JSON：
 
 ```json
 {
@@ -176,19 +364,19 @@ EasyNotice 会发送标题、正文、分组、点击链接和公网图片图标
 }
 ```
 
-只支持 URL 的程序也可以使用 GET：
+只支持 URL 的程序可以使用 GET：
 
 ```text
-http://NAS:18088/hook/你的入口密钥?title=通知标题&content=通知正文
+http://NAS:18088/hook/入口密钥?title=通知标题&content=通知正文
 ```
 
-兼容旧式路径：
+兼容旧式地址：
 
 ```text
 http://NAS:18088/api/v1/notify/入口名称?token=入口密钥
 ```
 
-还可以把入口密钥放在请求头：
+入口密钥也可以放在请求头：
 
 ```text
 Authorization: Bearer 入口密钥
@@ -200,85 +388,83 @@ Authorization: Bearer 入口密钥
 X-EasyNotice-Token: 入口密钥
 ```
 
-## 图片与内容规则
+## 内容和图片规则
 
-每个入口可以创建多条规则。规则按优先级从小到大匹配，第一条命中的规则生效。
+每个入口可以创建多条规则。规则按优先级从小到大检查，第一条匹配的规则生效。
 
-可检查的字段：
+可以匹配：
 
 - 标题
 - 正文
 - 事件类型
 - 严重级别：`info`、`success`、`warning`、`error`
-- 标题、正文和原始数据的任意位置
+- 标题、正文和原始数据中的任意内容
 
-可用条件：包含、等于、正则表达式、所有通知。
+可以使用包含、等于、正则表达式或“所有通知”条件。
 
-标题和正文模板支持简单路径占位符：
+标题和正文模板支持安全的路径占位符：
 
 ```text
 [失败] {{ title }}
 {{ body }} / {{ data.number }}
 ```
 
-模板不会执行 JavaScript 或 Jinja2，只读取收到的数据字段。
+模板只读取收到的数据字段，不会执行 JavaScript 或 Jinja2。
 
-## AI 配置助手
+## 可选 AI 配置助手
 
-AI 助手是可选功能，真实通知链路不依赖 AI。
+AI 助手不是通知链路的必需组件。即使没有配置 AI，所有入口、规则、队列和出口仍可正常工作。
 
-在“系统设置”中填写：
+在“系统设置”中可以填写：
 
 - OpenAI 兼容的 `/v1` 接口地址
 - 模型名称
 - API Key
 
-之后在添加通知入口时，可以：
+之后可输入项目名称、通知说明或上传 Webhook 设置截图，让 AI 生成一份待确认的接入建议。AI 不会自动修改 Docker 或直接创建入口。
 
-- 输入项目名称或 README 中的通知说明
-- 上传 Webhook 配置页面截图
-
-AI 只返回待确认建议，不会自动创建入口或修改 Docker。上传截图前请遮住 Token、Cookie、Webhook Key 和不希望发送到模型服务的 IP 地址。
-
-## 当前入口边界
-
-当前版本以 HTTP Webhook 为稳定核心，同时兼容 GET、表单和纯文本。没有直接开启 SMTP、MQTT 或 Syslog 监听端口。
-
-这些协议适合以后作为独立适配器加入：
-
-- MQTT：订阅 NAS 内部消息主题
-- SMTP：把仅支持邮件通知的设备邮件转换为标准通知
-- Syslog：接收路由器和系统日志，再按规则筛选
-- Apprise / Shoutrrr 兼容 URL：让已有通知生态直接指向 EasyNotice
-
-它们都会先进入现有的标准通知模型，因此不会改变规则、路由和出口层。
+上传截图前请遮住 Token、Cookie、Webhook Key 和不希望发送给模型服务的地址。
 
 ## 安全说明
 
-- 管理 API 需要登录，会话 Cookie 使用 `HttpOnly` 和 `SameSite=Strict`。
-- 渠道密钥和 AI API Key 使用 AES-256-GCM 加密。
-- 每个入口地址使用独立高强度随机密钥。
-- 更换入口密钥后，旧地址立即失效。
-- 图片上传限制为 4 MB，只接受 PNG、JPEG、WebP 和 GIF。
-- 企业微信图片上限按 2 MB 校验。
-- AI 截图最大约 6 MB，服务端只接受图片 Data URL。
-- 默认没有公网暴露要求。建议只在局域网访问管理页面；需要反向代理时同时启用 HTTPS。
-- 如果在 HTTPS 反向代理后运行，可设置 `EASYNOTICE_COOKIE_SECURE=true`。
-- 可以通过 `EASYNOTICE_SECRET` 显式提供加密主密钥；未提供时会自动生成并保存在数据目录。
+- 管理 API 登录后才能访问
+- 会话 Cookie 使用 `HttpOnly` 和 `SameSite=Strict`
+- 渠道密钥和 AI API Key 使用 AES-256-GCM 加密
+- 每个通知入口使用独立随机密钥，可随时更换
+- 更换入口密钥后旧地址立即失效
+- 图片上传限制为 4 MB，只接受 PNG、JPEG、WebP 和 GIF
+- 企业微信图片按 2 MB 上限校验
+- 默认不要求公网暴露管理页面
+- 反向代理到公网时应启用 HTTPS 和安全 Cookie
+
+## 查看状态和日志
+
+```bash
+docker compose ps
+docker compose logs -f --tail=100 easynotice
+```
+
+只测试健康状态：
+
+```bash
+curl http://127.0.0.1:18088/health
+```
 
 ## 本地开发
 
-需要 Node.js 22 或更高版本。
+这一节只适用于参与开发，不是普通部署步骤。
+
+需要 Node.js 22 或更高版本：
 
 ```bash
 npm install
 npm run dev
 ```
 
-- 管理前端：`http://localhost:5173`
-- API：`http://localhost:18088`
+- 前端开发地址：`http://localhost:5173`
+- API 地址：`http://localhost:18088`
 
-检查和测试：
+检查和构建：
 
 ```bash
 npm run check
@@ -286,34 +472,27 @@ npm test
 npm run build
 ```
 
-## 健康检查
+使用 Compose 构建本地源码镜像：
 
-```text
-GET /health
-```
-
-成功时返回：
-
-```json
-{
-  "status": "ok",
-  "service": "easynotice"
-}
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```
 
 ## 项目结构
 
 ```text
 server/
-  channels.ts       四类通知出口适配
+  channels.ts       通知出口适配
   normalize.ts      Webhook 字段归一化
   templates.ts      规则匹配与安全模板
   worker.ts         持久队列与主备补位
   routes/           管理 API
 src/
-  pages/            管理页面与向导
-  components/       基础组件和产品外壳
-data/               数据库、密钥和上传素材
+  pages/            管理页面和向导
+  components/       基础组件和出口配置引导
+docker-compose.yml  推荐部署文件
+data/               数据库、密钥和图片素材
 ```
 
-EasyNotice 参考了通知聚合工具的通用思路，但实现重点放在小白可完成的向导、可解释失败、主备路由和按事件识别图片上。
+- 镜像包：[GitHub Container Registry](https://github.com/xudong7587/easynotice/pkgs/container/easynotice)
+- 版本发布：[GitHub Releases](https://github.com/xudong7587/easynotice/releases)
