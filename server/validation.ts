@@ -3,10 +3,23 @@ import type { ChannelConfig, ChannelType } from './types.js';
 
 const httpUrl = z.string().trim().url('地址格式不正确').refine((value) => /^https?:\/\//i.test(value), '仅支持 HTTP 或 HTTPS');
 const optionalHttpUrl = z.union([httpUrl, z.literal('')]).optional();
+const weComRobotWebhook = z.string().trim().min(1, '请填写机器人 Webhook 或 Key').transform((value, context) => {
+  if (/^https?:\/\//i.test(value)) {
+    const parsed = httpUrl.safeParse(value);
+    if (parsed.success) return parsed.data;
+    context.addIssue({ code: 'custom', message: parsed.error.issues[0]?.message || 'Webhook 地址格式不正确' });
+    return z.NEVER;
+  }
+  if (!/^[A-Za-z0-9_-]{8,256}$/.test(value)) {
+    context.addIssue({ code: 'custom', message: '机器人 Key 格式不正确，请粘贴 key= 后面的完整内容' });
+    return z.NEVER;
+  }
+  return `https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=${encodeURIComponent(value)}`;
+});
 
 const schemas = {
   wecom_robot: z.object({
-    webhookUrl: httpUrl,
+    webhookUrl: weComRobotWebhook,
     mentionMobiles: z.array(z.string().trim()).optional(),
   }),
   wecom_app: z.object({

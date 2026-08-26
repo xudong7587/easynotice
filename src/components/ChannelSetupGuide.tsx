@@ -25,7 +25,7 @@ interface ChannelGuide {
 const guides: Record<ChannelType, ChannelGuide> = {
   wecom_robot: {
     title: '先在目标企业微信群里创建机器人',
-    intro: '这是最容易配置的企微出口，只需要群里生成的一条完整 Webhook 地址。',
+    intro: '这里只保存机器人 Key；原应用始终连接 EasyNotice，不会接触企微官方地址。',
     steps: [
       {
         title: '打开目标内部群',
@@ -36,18 +36,22 @@ const guides: Record<ChannelType, ChannelGuide> = {
         detail: <>依次查找“消息推送 → 自定义消息推送”；旧版客户端中名称可能是“群机器人 → 添加机器人”。填写机器人名称并保存。</>,
       },
       {
-        title: '复制完整 Webhook',
-        detail: <>复制以 <code>https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=</code> 开头的完整地址，不要只复制最后的 key。</>,
+        title: '从 Webhook 中取出 Key',
+        detail: <>机器人创建完成页会显示一条 Webhook。只复制其中 <code>key=</code> 后面的完整内容，不需要把前半段地址交给 EasyNotice。</>,
       },
       {
         title: '保存后发送测试',
-        detail: <>粘贴到下方“机器人 Webhook 地址”，保存出口，再回到出口卡片点击“发送测试”。</>,
+        detail: <>粘贴到下方“企业微信机器人 Key”，保存出口，再回到出口卡片点击“发送测试”。没有图片的通知会使用企业微信纯文本类型。</>,
+      },
+      {
+        title: 'EasyNotice 自动选择消息类型',
+        detail: <>普通通知发送纯文字；规则中上传不超过 2 MB 的 JPG/PNG 会先发原图、再发文字；填写公网图片地址会发送带缩略图的图文卡片，点击后打开规则链接或原图。</>,
       },
     ],
     fields: [
-      { name: '机器人 Webhook 地址', source: '机器人创建完成页里的完整 Webhook URL' },
+      { name: '企业微信机器人 Key', source: <>机器人 Webhook 中 <code>key=</code> 后面的内容</> },
     ],
-    note: <>已有机器人的 Webhook 通常只有创建者能查看。找不到添加入口时，先确认这是企业内部群，并检查自己是否有群管理权限、企业管理员是否限制了机器人。</>,
+    note: <>外部应用应使用 EasyNotice 通知入口生成的 <code>/hook/随机令牌</code> 地址；机器人 Key 只在这个出口中加密保存。已有机器人的 Key 通常只有创建者能查看，请勿公开。</>,
     docsUrl: 'https://developer.work.weixin.qq.com/document/path/91770',
     docsLabel: '企业微信群机器人文档',
   },

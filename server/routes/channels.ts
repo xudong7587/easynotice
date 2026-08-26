@@ -131,4 +131,20 @@ router.delete('/:id', (request, response) => {
   response.json({ ok: true });
 });
 
+router.delete('/:id/permanent', (request, response) => {
+  const row = db.prepare('SELECT id, enabled FROM channels WHERE id = ?').get(request.params.id) as
+    | { id: string; enabled: number }
+    | undefined;
+  if (!row) {
+    response.status(404).json({ error: '通知渠道不存在' });
+    return;
+  }
+  if (row.enabled) {
+    response.status(409).json({ error: '请先停用通知出口，再执行永久删除' });
+    return;
+  }
+  db.prepare('DELETE FROM channels WHERE id = ?').run(row.id);
+  response.json({ ok: true });
+});
+
 export const channelsRouter = router;

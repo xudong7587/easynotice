@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Archive, ArrowRight, Check, PaperPlaneTilt, PencilSimple, Plus, TestTube } from '@phosphor-icons/react';
+import { Archive, ArrowRight, Check, PaperPlaneTilt, PencilSimple, Plus, TestTube, Trash } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { formatDate } from '../lib/format';
@@ -31,7 +31,8 @@ function ChannelFields({ type, config, setConfig, editing }: { type: ChannelType
   const set = (key: string, value: unknown) => setConfig({ ...config, [key]: value });
   const secretHint = editing ? '已保存，留空表示不修改' : undefined;
   if (type === 'wecom_robot') return <>
-    <Field label="机器人 Webhook 地址" hint={secretHint || '在企业微信群的机器人设置中复制完整地址'} required><Input type="password" value={String(config.webhookUrl || '')} onChange={(event) => set('webhookUrl', event.target.value)} placeholder={editing ? '已保存，输入新地址才会替换' : 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...'} required={!editing} /></Field>
+    <Field label="企业微信机器人 Key" hint={secretHint || '只填写机器人 Webhook 中 key= 后面的内容'} required><Input type="password" value={String(config.webhookUrl || '')} onChange={(event) => set('webhookUrl', event.target.value)} placeholder={editing ? '已保存，输入新 Key 才会替换' : '例如 693a91f6-7xxx-4bc4-97a0-0ec2sifa5aaa'} required={!editing} /></Field>
+    <Callout title="外部应用只连接 EasyNotice">原应用使用通知入口生成的 EasyNotice 地址，不会看到企微官方地址或机器人 Key。EasyNotice 会自动发送纯文字、本地图片加文字，或公网图片图文卡片。</Callout>
     <Callout>群机器人通常不依赖企业可信 IP，适合放在企微应用后面作为备用渠道。</Callout>
   </>;
   if (type === 'wecom_app') return <>
@@ -110,6 +111,10 @@ export function ChannelsPage() {
     if (!window.confirm(`停用“${channel.name}”？它会从所有通知路由中移除。`)) return;
     await api(`/api/channels/${channel.id}`, { method: 'DELETE' }); toast.success('通知出口已停用'); load();
   };
+  const remove = async (channel: Channel) => {
+    if (!window.confirm(`永久删除“${channel.name}”？相关投递明细也会一并删除，此操作无法恢复。`)) return;
+    await api(`/api/channels/${channel.id}/permanent`, { method: 'DELETE' }); toast.success('通知出口已永久删除'); load();
+  };
 
   return <div>
     <PageHeader title="通知出口" description="消息最终发送到哪里。先测试单个出口，再为入口设置主备顺序。" action={<Button onClick={startCreate}><Plus size={17} />添加通知出口</Button>} />
@@ -121,7 +126,7 @@ export function ChannelsPage() {
         <h2>{channel.name}</h2><p>{meta.description}</p>
         <dl className="channel-card__facts"><div><dt>渠道类型</dt><dd>{meta.short}</dd></div><div><dt>最近成功</dt><dd>{channel.lastSuccessAt ? formatDate(channel.lastSuccessAt) : '尚未测试'}</dd></div></dl>
         {channel.lastError ? <div className="inline-error">{channel.lastError}</div> : null}
-        <div className="channel-card__actions"><Button variant="secondary" size="sm" onClick={() => test(channel)} disabled={!channel.enabled}><TestTube size={16} />发送测试</Button><Button variant="quiet" size="sm" onClick={() => startEdit(channel)}><PencilSimple size={16} />编辑</Button><Button variant="quiet" size="sm" onClick={() => archive(channel)} disabled={!channel.enabled}><Archive size={16} />停用</Button></div>
+        <div className="channel-card__actions"><Button variant="secondary" size="sm" onClick={() => test(channel)} disabled={!channel.enabled}><TestTube size={16} />发送测试</Button><Button variant="quiet" size="sm" onClick={() => startEdit(channel)}><PencilSimple size={16} />编辑</Button>{channel.enabled ? <Button variant="quiet" size="sm" onClick={() => archive(channel)}><Archive size={16} />停用</Button> : <Button variant="quiet" size="sm" onClick={() => remove(channel)}><Trash size={16} />删除</Button>}</div>
       </article>;
     })}</div> : <EmptyState icon={<PaperPlaneTilt size={34} />} title="还没有通知出口" description="从企业微信群机器人或 Bark 开始最简单，配置后先发送一条测试消息。" action={<Button onClick={startCreate}><Plus size={17} />添加第一个出口</Button>} />}
 

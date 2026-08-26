@@ -45,4 +45,21 @@ describe('webhook integration', () => {
   it('rejects an invalid webhook token', async () => {
     await agent.post('/hook/not-a-real-token').send({ title: '不应接收' }).expect(404);
   });
+
+  it('永久删除前要求先停用通知出口', async () => {
+    const created = await agent.post('/api/channels').send({
+      name: '待删除机器人',
+      type: 'wecom_robot',
+      config: { webhookUrl: '693a91f6-example-key' },
+      enabled: true,
+    }).expect(201);
+    const channelId = String(created.body.channel.id);
+
+    await agent.delete(`/api/channels/${channelId}/permanent`).expect(409);
+    await agent.delete(`/api/channels/${channelId}`).expect(200);
+    await agent.delete(`/api/channels/${channelId}/permanent`).expect(200);
+
+    const channels = await agent.get('/api/channels').expect(200);
+    expect(channels.body.channels).not.toContainEqual(expect.objectContaining({ id: channelId }));
+  });
 });

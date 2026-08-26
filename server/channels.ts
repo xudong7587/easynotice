@@ -59,7 +59,20 @@ function ensureHttpUrl(value: string, field: string): URL {
 
 function noticeText(notice: NoticeForDelivery): string {
   const source = `来源：${notice.sourceName}`;
-  return `${notice.title}\n${notice.body}\n\n${source}`.trim();
+  const link = notice.linkUrl ? `\n链接：${notice.linkUrl}` : '';
+  return `${notice.title}\n${notice.body}\n\n${source}${link}`.trim();
+}
+
+function truncateUtf8(value: string, maxBytes: number): string {
+  let bytes = 0;
+  let output = '';
+  for (const character of value) {
+    const characterBytes = Buffer.byteLength(character, 'utf8');
+    if (bytes + characterBytes > maxBytes) break;
+    output += character;
+    bytes += characterBytes;
+  }
+  return output;
 }
 
 function weComFailure(action: string, result: WeComApiResult, httpStatus: number): Error {
@@ -75,19 +88,6 @@ function weComFailure(action: string, result: WeComApiResult, httpStatus: number
     );
   }
   return new Error(`企业微信应用${action}失败：${detail}`);
-}
-
-function wecomMarkdown(notice: NoticeForDelivery): string {
-  const severity = {
-    info: 'info',
-    success: 'info',
-    warning: 'warning',
-    error: 'warning',
-  }[notice.severity];
-  const title = notice.severity === 'error'
-    ? `<font color="warning">${notice.title}</font>`
-    : `<font color="${severity}">${notice.title}</font>`;
-  return `${title}\n${notice.body}\n>来源：${notice.sourceName}`.slice(0, 4000);
 }
 
 async function postWeComRobot(url: string, payload: unknown): Promise<DeliveryResult> {
@@ -108,21 +108,23 @@ async function deliverWeComRobot(config: WeComRobotConfig, notice: NoticeForDeli
 
   if (notice.imageAssetPath && fs.existsSync(notice.imageAssetPath)) {
     const bytes = fs.readFileSync(notice.imageAssetPath);
-    if (bytes.byteLength <= 2 * 1024 * 1024) {
-      const md5 = await import('node:crypto').then(({ createHash }) => createHash('md5').update(bytes).digest('hex'));
-      await postWeComRobot(url, {
-        msgtype: 'image',
-        image: { base64: bytes.toString('base64'), md5 },
-      });
+    if (bytes.byteLength > 2 * 1024 * 1024) throw new Error('企业微信机器人图片不能超过 2 MB');
+    if (!['image/jpeg', 'image/png'].includes(notice.imageMimeType || '')) {
+      throw new Error('企业微信机器人图片仅支持 JPG 或 PNG，请在通知规则中重新上传');
     }
-  } else if (notice.imageUrl && notice.linkUrl) {
+    const md5 = await import('node:crypto').then(({ createHash }) => createHash('md5').update(bytes).digest('hex'));
+    await postWeComRobot(url, {
+      msgtype: 'image',
+      image: { base64: bytes.toString('base64'), md5 },
+    });
+  } else if (notice.imageUrl) {
     await postWeComRobot(url, {
       msgtype: 'news',
       news: {
         articles: [{
           title: notice.title.slice(0, 128),
           description: notice.body.slice(0, 512),
-          url: notice.linkUrl,
+          url: notice.linkUrl || notice.imageUrl,
           picurl: notice.imageUrl,
         }],
       },
@@ -130,10 +132,12 @@ async function deliverWeComRobot(config: WeComRobotConfig, notice: NoticeForDeli
     return { httpStatus: 200, responseExcerpt: '图文消息发送成功' };
   }
 
-  const markdown = wecomMarkdown(notice);
   return postWeComRobot(url, {
-    msgtype: 'markdown',
-    markdown: { content: markdown },
+    msgtype: 'text',
+    text: {
+      content: truncateUtf8(noticeText(notice), 2048),
+      mentioned_mobile_list: config.mentionMobiles?.length ? config.mentionMobiles : undefined,
+    },
   });
 }
 
