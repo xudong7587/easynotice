@@ -80,15 +80,29 @@ jobs:
           provenance: true
           sbom: true
 
-      - name: Smoke test data-directory permissions
+      - name: Smoke test LAN HTTP and data permissions
         shell: bash
         run: |
           container="easynotice-smoke"
           data_dir="${RUNNER_TEMP}/easynotice-smoke-data"
+          compose_config="${RUNNER_TEMP}/easynotice-compose.json"
+          response_headers="${RUNNER_TEMP}/easynotice-index.headers"
+          response_html="${RUNNER_TEMP}/easynotice-index.html"
           mkdir -p "$data_dir"
           sudo chown root:root "$data_dir"
           sudo chmod 755 "$data_dir"
           trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+
+          docker compose config --format json > "$compose_config"
+          node -e '
+            const fs = require("node:fs");
+            const config = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            const service = config.services?.easynotice;
+            const port = service?.ports?.find((entry) => Number(entry.target) === 18088);
+            if (!port || String(port.published) !== "18088") process.exit(1);
+            if (port.host_ip && !["0.0.0.0", "::"].includes(port.host_ip)) process.exit(1);
+            if (String(service.environment?.HOST) !== "0.0.0.0") process.exit(1);
+          ' "$compose_config"
 
           docker run --detach \
             --name "$container" \
@@ -117,6 +131,20 @@ jobs:
           test "$(sudo stat -c '%u:%a' "$data_dir")" = "1000:700"
           test "$(sudo stat -c '%u:%a' "$data_dir/uploads")" = "1000:700"
           test "$(sudo stat -c '%u:%a' "$data_dir/.installation-secret")" = "1000:600"
+          docker port "$container" 18088/tcp | grep -Eq '(^0\.0\.0\.0:18088$|^\[::\]:18088$)'
+          curl --fail --silent --show-error \
+            --dump-header "$response_headers" \
+            --output "$response_html" \
+            http://127.0.0.1:18088/
+          if grep -qi 'upgrade-insecure-requests' "$response_headers"; then
+            echo 'HTTP management page must not force LAN assets to HTTPS'
+            exit 1
+          fi
+          asset_path="$(grep -oE 'src="/assets/[^"]+\.js"' "$response_html" | head -n 1 | cut -d '"' -f 2)"
+          test -n "$asset_path"
+          curl --fail --silent --show-error "http://127.0.0.1:18088${asset_path}" >/dev/null
+          grep -q 'href="/favicon.svg"' "$response_html"
+          curl --fail --silent --show-error http://127.0.0.1:18088/favicon.svg >/dev/null
           docker exec "$container" node -e \
             "fetch('http://127.0.0.1:18088/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
           docker exec "$container" sh -c \

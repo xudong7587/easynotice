@@ -28,6 +28,10 @@ export function createApp() {
         fontSrc: ["'self'", 'data:'],
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"],
+        // EasyNotice is commonly opened directly over HTTP on a NAS LAN IP.
+        // Helmet enables this directive by default, which makes browsers rewrite
+        // /assets requests to HTTPS and leaves the HTTP management page blank.
+        upgradeInsecureRequests: null,
       },
     },
     crossOriginResourcePolicy: { policy: 'same-origin' },
