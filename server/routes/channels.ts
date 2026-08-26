@@ -5,9 +5,10 @@ import { db } from '../db.js';
 import { decryptSecret, encryptSecret } from '../crypto.js';
 import { deliverToChannel } from '../channels.js';
 import { maskChannelConfig, parseChannelConfig } from '../validation.js';
-import type { ChannelConfig, ChannelType, NoticeForDelivery } from '../types.js';
+import type { ChannelConfig, ChannelType } from '../types.js';
 import { requestBaseUrl } from '../url.js';
 import { redactSensitiveText } from '../security.js';
+import { buildChannelPreview } from '../preview.js';
 
 const router = Router();
 
@@ -128,24 +129,31 @@ router.post('/:id/test', async (request, response, next) => {
     response.status(404).json({ error: '通知渠道不存在' });
     return;
   }
-  const notice: NoticeForDelivery = {
-    eventId: `test-${nanoid(8)}`,
-    sourceName: 'EasyNotice 自检',
-    title: request.body?.title || '渠道连接成功',
-    body: request.body?.body || '这是一条测试通知。收到它说明这个出口已经可以正常工作。',
-    eventType: 'channel_test',
-    severity: 'success',
-    raw: {},
-  };
+  const input = z.object({ sourceId: z.string().trim().optional() }).parse(request.body || {});
+  const notice = buildChannelPreview(input.sourceId || undefined, requestBaseUrl(request));
+  if (!notice) {
+    response.status(404).json({ error: '用于预览的通知来源不存在' });
+    return;
+  }
   const startedAt = Date.now();
   try {
     const result = await deliverToChannel(row.type, decryptSecret<ChannelConfig>(row.config_encrypted), notice);
     db.prepare(`
       UPDATE channels SET last_status = 'success', last_error = NULL, last_success_at = ?, updated_at = ? WHERE id = ?
     `).run(Date.now(), Date.now(), row.id);
-    response.json({ ok: true, durationMs: Date.now() - startedAt, detail: result.responseExcerpt });
+    response.json({
+      ok: true,
+      durationMs: Date.now() - startedAt,
+      detail: result.responseExcerpt,
+      preview: {
+        sourceName: notice.sourceName,
+        title: notice.title,
+        eventType: notice.eventType,
+        hasImage: Boolean(notice.imageAssetPath || notice.imageUrl),
+      },
+    });
   } catch (error) {
-    const message = redactSensitiveText(error instanceof Error ? error.message : '测试发送失败');
+    const message = redactSensitiveText(error instanceof Error ? error.message : '图文预览发送失败');
     db.prepare(`UPDATE channels SET last_status = 'failed', last_error = ?, updated_at = ? WHERE id = ?`)
       .run(message.slice(0, 800), Date.now(), row.id);
     next(Object.assign(new Error(message), { statusCode: 502 }));

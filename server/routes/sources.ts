@@ -9,6 +9,7 @@ import { slugify } from '../validation.js';
 import { applyFirstRule } from '../templates.js';
 import type { NormalizedNotice, RuleRow, RouteMode } from '../types.js';
 import { wakeWorker } from '../worker.js';
+import { buildPreviewSample } from '../preview-samples.js';
 
 const router = Router();
 
@@ -174,12 +175,12 @@ router.post('/:id/test', (request, response) => {
     response.status(404).json({ error: '通知入口不存在' });
     return;
   }
+  const recipeSample = buildPreviewSample(source.name, source.recipe_id);
   const sample: NormalizedNotice = {
-    title: request.body?.title || `${source.name} 测试通知`,
-    body: request.body?.body || '入口、规则和路由已经连通。现在检查手机或聊天窗口是否收到消息。',
-    eventType: request.body?.eventType || 'test',
-    severity: 'success',
-    raw: { title: request.body?.title, content: request.body?.body, event: 'test' },
+    ...recipeSample,
+    title: request.body?.title || recipeSample.title,
+    body: request.body?.body || recipeSample.body,
+    eventType: request.body?.eventType || recipeSample.eventType,
   };
   const rules = db.prepare('SELECT * FROM rules WHERE source_id = ? AND enabled = 1 ORDER BY priority ASC, created_at ASC')
     .all(source.id) as RuleRow[];
@@ -192,7 +193,7 @@ router.post('/:id/test', (request, response) => {
       image_url, link_url, raw_json, matched_rule_id, received_at
     ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    id, source.id, `manual-${nanoid(8)}`, applied.notice.title, applied.notice.body,
+    id, source.id, `manual-preview-${nanoid(8)}`, applied.notice.title, applied.notice.body,
     applied.notice.eventType, applied.notice.severity, applied.notice.imageUrl || null,
     applied.notice.linkUrl || null, encryptStoredData(applied.notice.raw), applied.matchedRule?.id || null, now,
   );

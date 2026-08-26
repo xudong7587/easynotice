@@ -40,8 +40,8 @@ const guides: Record<ChannelType, ChannelGuide> = {
         detail: <>机器人创建完成页会显示一条 Webhook。只复制其中 <code>key=</code> 后面的完整内容，不需要把前半段地址交给 EasyNotice。</>,
       },
       {
-        title: '保存后发送测试',
-        detail: <>粘贴到下方“企业微信机器人 Key”，保存出口，再回到出口卡片点击“发送测试”。没有图片的通知会使用企业微信纯文本类型。</>,
+        title: '保存后发送图文预览',
+        detail: <>粘贴到下方“企业微信机器人 Key”，保存出口，再回到出口卡片点击“图文预览”。预览会优先套用来源图片规则，没有匹配时使用内置封面。</>,
       },
       {
         title: 'EasyNotice 自动选择消息类型',
@@ -76,8 +76,8 @@ const guides: Record<ChannelType, ChannelGuide> = {
         detail: <>只发送通知时无需设置回调。以后需要接收成员消息或事件时，先保存出口，再次编辑并开启“接收消息与事件回调”；EasyNotice 会提供专属 URL，并校验 Token、EncodingAESKey、签名和加密内容。</>,
       },
       {
-        title: '保存并发送测试',
-        detail: <>“接收成员”可先保留 <code>@all</code>，它只覆盖应用可见范围。保存后点击“发送测试”；若提示错误 <code>60020</code>，EasyNotice 会直接显示企微识别到的 <code>from ip</code>，把该 IP 加入企业可信 IP 后重试。</>,
+        title: '保存并发送图文预览',
+        detail: <>“接收成员”可先保留 <code>@all</code>，它只覆盖应用可见范围。保存后点击“图文预览”；若提示错误 <code>60020</code>，EasyNotice 会直接显示企微识别到的 <code>from ip</code>，把该 IP 加入企业可信 IP 后重试。</>,
       },
     ],
     fields: [
@@ -109,7 +109,7 @@ const guides: Record<ChannelType, ChannelGuide> = {
       },
       {
         title: '填写并测试',
-        detail: <>把 Token 和 Chat ID 填到下方。API 地址通常保持官方默认值，保存后发送测试。</>,
+        detail: <>把 Token 和 Chat ID 填到下方。API 地址通常保持官方默认值，保存后发送图文预览。</>,
       },
     ],
     fields: [
@@ -139,7 +139,7 @@ const guides: Record<ChannelType, ChannelGuide> = {
       },
       {
         title: '选择分组和提醒级别',
-        detail: <>分组用于把 EasyNotice 通知归在一起；“时效通知”可在专注模式中显示，“静默”只进入通知中心。保存后发送测试。</>,
+        detail: <>分组用于把 EasyNotice 通知归在一起；“时效通知”可在专注模式中显示，“静默”只进入通知中心。保存后发送图文预览。</>,
       },
     ],
     fields: [

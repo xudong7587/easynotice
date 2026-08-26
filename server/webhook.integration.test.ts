@@ -114,6 +114,51 @@ describe('webhook integration', () => {
     await publicClient.get(`${signed.pathname.slice(0, signed.pathname.lastIndexOf('/') + 1)}invalid-signature`).expect(404);
   });
 
+  it('按通知来源生成带内置图片的出口预览', async () => {
+    const created = await agent.post('/api/sources').send({
+      name: 'Lucky 主路由', recipeId: 'lucky', routeMode: 'failover', channelIds: [], enabled: true,
+    }).expect(201);
+    const { buildChannelPreview } = await import('./preview.js');
+    const preview = buildChannelPreview(String(created.body.source.id), 'http://nas.local:18088');
+
+    expect(preview).toMatchObject({
+      sourceName: 'Lucky 主路由',
+      title: '公网 IP 已更新',
+      eventType: 'ddns_changed',
+      imageAssetUrl: 'http://nas.local:18088/notification-preview.png',
+      imageMimeType: 'image/png',
+    });
+    expect(preview?.imageAssetPath).toBeTruthy();
+    expect(fs.existsSync(preview!.imageAssetPath!)).toBe(true);
+  });
+
+  it('出口预览优先套用来源的标题和本地图片规则', async () => {
+    const created = await agent.post('/api/sources').send({
+      name: 'OpenWrt 主路由', recipeId: 'openwrt-istoreos', routeMode: 'failover', channelIds: [], enabled: true,
+    }).expect(201);
+    const uploaded = await agent.post('/api/assets')
+      .attach('image', Buffer.from('preview-rule-image'), { filename: 'router.png', contentType: 'image/png' })
+      .expect(201);
+    await agent.post('/api/rules').send({
+      sourceId: created.body.source.id,
+      name: '设备上线样式',
+      enabled: true,
+      priority: 0,
+      matchField: 'eventType',
+      matchOperator: 'equals',
+      matchValue: 'device_online',
+      titleTemplate: '家庭网络：{{ title }}',
+      imageAssetId: uploaded.body.asset.id,
+    }).expect(201);
+
+    const { buildChannelPreview } = await import('./preview.js');
+    const preview = buildChannelPreview(String(created.body.source.id), 'http://nas.local:18088');
+    expect(preview?.title).toBe('家庭网络：新设备接入网络');
+    expect(preview?.imageAssetUrl).toContain(`/media/${uploaded.body.asset.id}/`);
+    expect(preview?.imageAssetUrl).not.toContain('notification-preview.png');
+    expect(fs.existsSync(preview!.imageAssetPath!)).toBe(true);
+  });
+
   it('永久删除前要求先停用通知入口', async () => {
     const created = await agent.post('/api/sources').send({
       name: '待删除入口', recipeId: 'generic', routeMode: 'failover', channelIds: [], enabled: true,

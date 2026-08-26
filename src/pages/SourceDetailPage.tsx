@@ -91,18 +91,18 @@ export function SourceDetailPage() {
     finally { setSavingRoute(false); }
   };
   const test = async () => {
-    const toastId = toast.loading('正在生成一条入口测试通知');
-    try { await api(`/api/sources/${id}/test`, { method: 'POST', body: '{}' }); toast.success('测试通知已进入发送队列', { id: toastId }); }
+    const toastId = toast.loading('正在生成一条真实图文预览');
+    try { await api(`/api/sources/${id}/test`, { method: 'POST', body: '{}' }); toast.success('图文预览已进入发送队列', { id: toastId }); }
     catch (error) { toast.error(error instanceof Error ? error.message : '测试失败', { id: toastId }); }
   };
   const testChannel = async (channel: Channel) => {
     setTestingChannelId(channel.id);
-    const toastId = toast.loading(`正在单独测试 ${channel.name}`);
+    const toastId = toast.loading(`正在通过 ${channel.name} 发送图文预览`);
     try {
-      const result = await api<{ durationMs: number }>(`/api/channels/${channel.id}/test`, { method: 'POST', body: '{}' });
-      toast.success(`${channel.name} 测试成功，用时 ${result.durationMs} ms`, { id: toastId });
+      const result = await api<{ durationMs: number; preview: { title: string } }>(`/api/channels/${channel.id}/test`, { method: 'POST', body: JSON.stringify({ sourceId: source.id }) });
+      toast.success(`${channel.name} 已发送“${result.preview.title}”，用时 ${result.durationMs} ms`, { id: toastId });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '出口测试失败', { id: toastId });
+      toast.error(error instanceof Error ? error.message : '图文预览发送失败', { id: toastId });
     } finally {
       setTestingChannelId(undefined);
     }
@@ -134,7 +134,7 @@ export function SourceDetailPage() {
 
   return <div>
     <Link to="/sources" className="back-link"><ArrowLeft size={16} />返回通知入口</Link>
-    <PageHeader title={source.name} description={`${recipe?.name || '通用 Webhook'} · ${source.lastReceivedAt ? `最近收到于 ${timeAgo(source.lastReceivedAt)}` : '等待第一条真实通知'}`} action={<Button variant="secondary" onClick={test}><TestTube size={17} />发送整链路测试</Button>} />
+    <PageHeader title={source.name} description={`${recipe?.name || '通用 Webhook'} · ${source.lastReceivedAt ? `最近收到于 ${timeAgo(source.lastReceivedAt)}` : '等待第一条真实通知'}`} action={<Button variant="secondary" onClick={test}><TestTube size={17} />整链路图文预览</Button>} />
 
     <div className="detail-layout">
       <div className="detail-main">
@@ -161,7 +161,7 @@ export function SourceDetailPage() {
           <div className="segmented"><button type="button" className={routeMode === 'failover' ? 'is-active' : ''} onClick={() => setRouteMode('failover')}>失败后按顺序补位</button><button type="button" className={routeMode === 'broadcast' ? 'is-active' : ''} onClick={() => setRouteMode('broadcast')}>每个出口都发送</button></div>
           <div className="route-editor__list">{channels.map((channel) => { const selected = routeIds.includes(channel.id); const index = routeIds.indexOf(channel.id); const meta = channelMeta[channel.type]; const Icon = meta.icon; return <div className={`route-editor__row ${selected ? 'is-selected' : ''}`} key={channel.id}>
             <label><input type="checkbox" checked={selected} onChange={() => toggle(channel.id)} /><span className="channel-logo"><Icon size={18} /></span><span><strong>{channel.name}</strong><small>{selected && routeMode === 'failover' ? `顺位 ${index + 1}` : meta.short}</small></span></label>
-            <div className="route-editor__actions"><button type="button" className="route-editor__test" onClick={() => void testChannel(channel)} disabled={testingChannelId === channel.id} aria-label={`单独测试 ${channel.name}`}><TestTube size={14} /><span>{testingChannelId === channel.id ? '测试中' : '测试'}</span></button>{selected && routeMode === 'failover' ? <div className="route-editor__moves"><button type="button" onClick={() => move(channel.id, -1)} disabled={index === 0} aria-label="上移"><ArrowUp size={15} /></button><button type="button" onClick={() => move(channel.id, 1)} disabled={index === routeIds.length - 1} aria-label="下移"><ArrowDown size={15} /></button></div> : null}</div>
+            <div className="route-editor__actions"><button type="button" className="route-editor__test" onClick={() => void testChannel(channel)} disabled={testingChannelId === channel.id} aria-label={`通过 ${channel.name} 发送图文预览`}><ImageSquare size={14} /><span>{testingChannelId === channel.id ? '发送中' : '预览'}</span></button>{selected && routeMode === 'failover' ? <div className="route-editor__moves"><button type="button" onClick={() => move(channel.id, -1)} disabled={index === 0} aria-label="上移"><ArrowUp size={15} /></button><button type="button" onClick={() => move(channel.id, 1)} disabled={index === routeIds.length - 1} aria-label="下移"><ArrowDown size={15} /></button></div> : null}</div>
           </div>; })}</div>
           {routeMode === 'failover' && routeIds.length > 1 ? <Callout title="当前发送顺序">先尝试 {routeIds.map((channelId) => channels.find((channel) => channel.id === channelId)?.name).filter(Boolean).join('；失败后再尝试 ')}</Callout> : null}
           <Button onClick={saveRoute} disabled={savingRoute}><FloppyDisk size={16} />{savingRoute ? '正在保存…' : '保存出口设置'}</Button>

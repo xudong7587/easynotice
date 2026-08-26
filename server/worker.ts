@@ -7,10 +7,12 @@ import { publicAssetUrl } from './media.js';
 import { deliverToChannel } from './channels.js';
 import type { ChannelConfig, ChannelType, NoticeForDelivery, RouteMode } from './types.js';
 import { redactSensitiveText } from './security.js';
+import { builtInPreviewImagePath, builtInPreviewImageUrl } from './preview.js';
 
 interface EventRow {
   id: string;
   source_id: string;
+  request_id: string;
   title: string;
   body: string;
   event_type: string;
@@ -79,6 +81,7 @@ function loadAsset(event: EventRow): AssetRow | undefined {
 
 function buildNotice(event: EventRow, sourceName: string): NoticeForDelivery {
   const asset = loadAsset(event);
+  const needsPreviewImage = event.request_id.startsWith('manual-preview-') && !asset && !event.image_url;
   return {
     eventId: event.id,
     sourceName,
@@ -89,9 +92,9 @@ function buildNotice(event: EventRow, sourceName: string): NoticeForDelivery {
     imageUrl: event.image_url || undefined,
     linkUrl: event.link_url || undefined,
     raw: decryptStoredData<Record<string, unknown>>(event.raw_json),
-    imageAssetPath: asset ? path.join(uploadDir, asset.stored_name) : undefined,
-    imageAssetUrl: asset ? publicAssetUrl(asset.id) : undefined,
-    imageMimeType: asset?.mime_type,
+    imageAssetPath: asset ? path.join(uploadDir, asset.stored_name) : needsPreviewImage ? builtInPreviewImagePath() : undefined,
+    imageAssetUrl: asset ? publicAssetUrl(asset.id) : needsPreviewImage ? builtInPreviewImageUrl() : undefined,
+    imageMimeType: asset?.mime_type || (needsPreviewImage ? 'image/png' : undefined),
   };
 }
 

@@ -26,7 +26,7 @@ export function OnboardingPage({ onDone }: { onDone: () => void }) {
   const complete = steps.every((step) => step.done);
   return <div className="onboarding-page">
     <PageHeader title="欢迎使用 EasyNotice" description="不用一次理解所有概念。按这三个动作完成第一条通知。" />
-    <div className="onboarding-intro"><span><BellRinging size={30} weight="fill" /></span><div><h2>先跑通，再细调</h2><p>建议先用一个群机器人或 Bark 收到测试消息，然后再添加企微应用、图片规则和更多 Docker。</p></div></div>
+    <div className="onboarding-intro"><span><BellRinging size={30} weight="fill" /></span><div><h2>先跑通，再细调</h2><p>建议先用一个群机器人或 Bark 收到图文预览，然后再添加企微应用、图片规则和更多 Docker。</p></div></div>
     <div className="onboarding-steps section-block">{steps.map((step, index) => { const Icon = step.icon; return <article className={`onboarding-step ${step.done ? 'is-done' : ''}`} key={step.title}><div className="onboarding-step__number">{step.done ? <Check size={20} weight="bold" /> : index + 1}</div><span className="onboarding-step__icon"><Icon size={25} weight="duotone" /></span><div><h2>{step.title}</h2><p>{step.description}</p></div><Link to={step.to}><Button variant={step.done ? 'quiet' : 'secondary'}>{step.done ? '查看' : step.action}<ArrowRight size={16} /></Button></Link></article>; })}</div>
     {complete ? <Callout tone="success" title="基础通知链路已经连通">你现在可以结束向导。之后仍可从左侧导航随时增加入口和出口。</Callout> : <Callout>每完成一项后回到这里，状态会自动更新。也可以暂时结束，稍后继续配置。</Callout>}
     <div className="onboarding-actions"><Button variant="secondary" onClick={finish}>{complete ? '完成向导' : '暂时结束向导'}<ArrowRight size={16} /></Button></div>

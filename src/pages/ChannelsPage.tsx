@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Archive, ArrowRight, Check, PaperPlaneTilt, PencilSimple, Plus, TestTube, Trash } from '@phosphor-icons/react';
+import { Archive, ArrowRight, Check, ImageSquare, PaperPlaneTilt, PencilSimple, Plus, Trash } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { formatDate } from '../lib/format';
-import type { Channel, ChannelType } from '../types';
+import type { Channel, ChannelType, Source } from '../types';
 import { channelMeta } from '../components/channelMeta';
 import { ChannelSetupGuide } from '../components/ChannelSetupGuide';
 import { DialogShell } from '../components/DialogShell';
@@ -43,7 +43,7 @@ function ChannelFields({ type, config, setConfig, editing, channel }: { type: Ch
     <div className="form-grid form-grid--2"><Field label="企业 ID (CorpID)" hint="我的企业 → 企业信息 → 企业 ID" required><Input value={String(config.corpId || '')} onChange={(event) => set('corpId', event.target.value)} placeholder="wwxxxxxxxxxxxxxxxx" /></Field><Field label="应用 AgentId" hint="自建应用详情页中的数字 ID" required><Input inputMode="numeric" value={String(config.agentId || '')} onChange={(event) => set('agentId', event.target.value)} placeholder="1000002" /></Field></div>
     <Field label="应用 Secret" hint={secretHint || '自建应用详情页 → Secret → 查看'} required><Input type="password" value={String(config.corpSecret || '')} onChange={(event) => set('corpSecret', event.target.value)} placeholder={editing ? '已保存，输入新 Secret 才会替换' : '应用 Secret（不要填写通讯录 Secret）'} required={!editing} /></Field>
     <div className="form-grid form-grid--2"><Field label="接收成员" hint="默认 @all，也可填写成员账号并用 | 分隔"><Input value={String(config.toUser || '')} onChange={(event) => set('toUser', event.target.value)} /></Field><Field label="接收部门" hint="可选，多个部门用 | 分隔"><Input value={String(config.toParty || '')} onChange={(event) => set('toParty', event.target.value)} /></Field></div>
-    <Callout tone="warning" title="企业可信 IP 在企微后台配置，不填在这里">路径是“应用管理 → 自建应用 → 开发者接口 → 企业可信 IP”。先保存并发送测试；若企微返回错误 60020，错误详情会直接显示需要加入的公网出口 IP。</Callout>
+    <Callout tone="warning" title="企业可信 IP 在企微后台配置，不填在这里">路径是“应用管理 → 自建应用 → 开发者接口 → 企业可信 IP”。先保存并发送图文预览；若企微返回错误 60020，错误详情会直接显示需要加入的公网出口 IP。</Callout>
     {!editing ? <Callout title="交互回调可选">先保存企微应用出口；再次进入编辑后，可以启用回调并取得专属 URL。只主动发送通知时无需启用。</Callout> : <>
       <label className="check-row"><input type="checkbox" checked={Boolean(config.callbackEnabled)} onChange={(event) => set('callbackEnabled', event.target.checked)} /><span><strong>启用接收消息与事件回调（可选）</strong><small>完成签名校验和 AES 解密并留档；当前版本不会自动回复成员</small></span></label>
       {config.callbackEnabled ? <>
@@ -86,14 +86,24 @@ function ChannelFields({ type, config, setConfig, editing, channel }: { type: Ch
 
 export function ChannelsPage() {
   const [channels, setChannels] = useState<Channel[]>();
+  const [sources, setSources] = useState<Source[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Channel>();
   const [type, setType] = useState<ChannelType>('wecom_robot');
   const [name, setName] = useState('企业微信群机器人');
   const [config, setConfig] = useState<Record<string, unknown>>(blankConfig('wecom_robot'));
   const [saving, setSaving] = useState(false);
+  const [previewing, setPreviewing] = useState<Channel>();
+  const [previewSourceId, setPreviewSourceId] = useState('');
+  const [previewSending, setPreviewSending] = useState(false);
 
-  const load = () => api<{ channels: Channel[] }>('/api/channels').then((result) => setChannels(result.channels)).catch((error) => toast.error(error.message));
+  const load = () => Promise.all([
+    api<{ channels: Channel[] }>('/api/channels'),
+    api<{ sources: Source[] }>('/api/sources'),
+  ]).then(([channelResult, sourceResult]) => {
+    setChannels(channelResult.channels);
+    setSources(sourceResult.sources.filter((source) => source.enabled));
+  }).catch((error) => toast.error(error.message));
   useEffect(() => { void load(); }, []);
 
   const startCreate = () => {
@@ -114,10 +124,31 @@ export function ChannelsPage() {
     } catch (error) { toast.error(error instanceof Error ? error.message : '保存失败'); }
     finally { setSaving(false); }
   };
-  const test = async (channel: Channel) => {
-    const toastId = toast.loading(`正在测试 ${channel.name}`);
-    try { const result = await api<{ durationMs: number }>(`/api/channels/${channel.id}/test`, { method: 'POST', body: '{}' }); toast.success(`测试消息已发送，用时 ${result.durationMs} ms`, { id: toastId }); load(); }
-    catch (error) { toast.error(error instanceof Error ? error.message : '测试失败', { id: toastId }); load(); }
+  const openPreview = (channel: Channel) => {
+    const preferred = sources.find((source) => source.recipeId === 'lucky')
+      || sources.find((source) => source.recipeId === 'openwrt-istoreos')
+      || sources[0];
+    setPreviewSourceId(preferred?.id || '');
+    setPreviewing(channel);
+  };
+  const sendPreview = async () => {
+    if (!previewing) return;
+    setPreviewSending(true);
+    const toastId = toast.loading(`正在发送 ${previewing.name} 图文预览`);
+    try {
+      const result = await api<{ durationMs: number; preview: { title: string; sourceName: string; hasImage: boolean } }>(`/api/channels/${previewing.id}/test`, {
+        method: 'POST',
+        body: JSON.stringify({ sourceId: previewSourceId || undefined }),
+      });
+      toast.success(`已发送“${result.preview.title}”，用时 ${result.durationMs} ms`, { id: toastId });
+      setPreviewing(undefined);
+      void load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '图文预览发送失败', { id: toastId });
+      void load();
+    } finally {
+      setPreviewSending(false);
+    }
   };
   const archive = async (channel: Channel) => {
     if (!window.confirm(`停用“${channel.name}”？它会从所有通知路由中移除。`)) return;
@@ -129,18 +160,26 @@ export function ChannelsPage() {
   };
 
   return <div>
-    <PageHeader title="通知出口" description="消息最终发送到哪里。先测试单个出口，再为入口设置主备顺序。" action={<Button onClick={startCreate}><Plus size={17} />添加通知出口</Button>} />
+    <PageHeader title="通知出口" description="消息最终发送到哪里。先发送一条真实图文预览，再为入口设置主备顺序。" action={<Button onClick={startCreate}><Plus size={17} />添加通知出口</Button>} />
     <Callout title="推荐的补位方式">企业微信应用放第一位，企业微信群机器人放第二位。应用因可信 IP 失败后，EasyNotice 会自动尝试机器人。</Callout>
     {!channels ? <Skeleton lines={5} /> : channels.length ? <div className="channel-grid section-block">{channels.map((channel) => {
       const meta = channelMeta[channel.type]; const Icon = meta.icon;
       return <article className={`channel-card ${!channel.enabled ? 'is-disabled' : ''}`} key={channel.id}>
         <div className="channel-card__top"><span className="channel-logo channel-logo--large"><Icon size={25} weight="duotone" /></span><StatusBadge status={channel.enabled ? channel.lastStatus : 'archived'} /></div>
         <h2>{channel.name}</h2><p>{meta.description}</p>
-        <dl className="channel-card__facts"><div><dt>渠道类型</dt><dd>{meta.short}</dd></div><div><dt>最近成功</dt><dd>{channel.lastSuccessAt ? formatDate(channel.lastSuccessAt) : '尚未测试'}</dd></div></dl>
+        <dl className="channel-card__facts"><div><dt>渠道类型</dt><dd>{meta.short}</dd></div><div><dt>最近成功</dt><dd>{channel.lastSuccessAt ? formatDate(channel.lastSuccessAt) : '尚未成功发送'}</dd></div></dl>
         {channel.lastError ? <div className="inline-error">{channel.lastError}</div> : null}
-        <div className="channel-card__actions"><Button variant="secondary" size="sm" onClick={() => test(channel)} disabled={!channel.enabled}><TestTube size={16} />发送测试</Button><Button variant="quiet" size="sm" onClick={() => startEdit(channel)}><PencilSimple size={16} />编辑</Button>{channel.enabled ? <Button variant="quiet" size="sm" onClick={() => archive(channel)}><Archive size={16} />停用</Button> : <Button variant="quiet" size="sm" onClick={() => remove(channel)}><Trash size={16} />删除</Button>}</div>
+        <div className="channel-card__actions"><Button variant="secondary" size="sm" onClick={() => openPreview(channel)} disabled={!channel.enabled}><ImageSquare size={16} />图文预览</Button><Button variant="quiet" size="sm" onClick={() => startEdit(channel)}><PencilSimple size={16} />编辑</Button>{channel.enabled ? <Button variant="quiet" size="sm" onClick={() => archive(channel)}><Archive size={16} />停用</Button> : <Button variant="quiet" size="sm" onClick={() => remove(channel)}><Trash size={16} />删除</Button>}</div>
       </article>;
-    })}</div> : <EmptyState icon={<PaperPlaneTilt size={34} />} title="还没有通知出口" description="从企业微信群机器人或 Bark 开始最简单，配置后先发送一条测试消息。" action={<Button onClick={startCreate}><Plus size={17} />添加第一个出口</Button>} />}
+    })}</div> : <EmptyState icon={<PaperPlaneTilt size={34} />} title="还没有通知出口" description="从企业微信群机器人或 Bark 开始最简单，配置后先发送一条图文预览。" action={<Button onClick={startCreate}><Plus size={17} />添加第一个出口</Button>} />}
+
+    <DialogShell open={Boolean(previewing)} onOpenChange={(value) => { if (!value && !previewSending) setPreviewing(undefined); }} title={previewing ? `预览 ${previewing.name}` : '图文预览'} description="选择一个通知来源，EasyNotice 会按它的真实样例和图片规则发送。" size="sm" footer={<><Button variant="secondary" onClick={() => setPreviewing(undefined)} disabled={previewSending}>取消</Button><Button onClick={() => void sendPreview()} disabled={previewSending}><ImageSquare size={16} />{previewSending ? '正在发送…' : '发送图文预览'}</Button></>}>
+      <div className="preview-dialog">
+        <Callout title="这次会看到完整消息">标题、正文、来源名称和事件字段会模拟真实通知；该来源已有图片规则时优先使用规则图片，否则使用内置封面。</Callout>
+        <Field label="模拟哪个通知来源" hint="没有来源时也可以使用内置 Lucky 样例"><NativeSelect value={previewSourceId} onChange={(event) => setPreviewSourceId(event.target.value)}><option value="">Lucky 主路由（内置样例）</option>{sources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}</NativeSelect></Field>
+        <div className="preview-cover"><img src="/notification-preview.png" alt="路由器与 NAS 通知预览封面" /><div><small>没有匹配图片规则时</small><strong>使用这张内置封面</strong><p>这里只展示兜底图。真正发送时会优先套用所选来源的规则图片。</p></div></div>
+      </div>
+    </DialogShell>
 
     <DialogShell open={open} onOpenChange={setOpen} title={editing ? '编辑通知出口' : '添加通知出口'} description="密钥会在服务端加密保存，保存后不会在页面中明文显示。" size="lg" footer={<><Button variant="secondary" onClick={() => setOpen(false)}>取消</Button><Button type="submit" form="channel-form" disabled={saving}>{saving ? '正在保存…' : '保存出口'}<ArrowRight size={16} /></Button></>}>
       <form id="channel-form" className="dialog-form" onSubmit={save}>

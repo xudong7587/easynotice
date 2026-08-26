@@ -112,7 +112,7 @@ export function DashboardPage() {
               {data.channelHealth.map((channel) => {
                 const meta = channelMeta[channel.type];
                 const Icon = meta.icon;
-                return <div className="channel-health" key={channel.id}><span className="channel-logo"><Icon size={20} weight="duotone" /></span><div><strong>{channel.name}</strong><small>{channel.lastSuccessAt ? `成功于 ${timeAgo(channel.lastSuccessAt)}` : '请先发送测试'}</small></div><StatusBadge status={channel.enabled ? channel.lastStatus : 'archived'} /></div>;
+                return <div className="channel-health" key={channel.id}><span className="channel-logo"><Icon size={20} weight="duotone" /></span><div><strong>{channel.name}</strong><small>{channel.lastSuccessAt ? `成功于 ${timeAgo(channel.lastSuccessAt)}` : '请先发送图文预览'}</small></div><StatusBadge status={channel.enabled ? channel.lastStatus : 'archived'} /></div>;
               })}
             </div>
           ) : <div className="panel-empty"><PaperPlaneTilt size={28} /><p>还没有通知出口。先添加一个群机器人或 Bark。</p></div>}

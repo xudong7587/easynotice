@@ -27,7 +27,7 @@ export function GuidePage() {
 
     <div className="guide-grid section-block">
       <section className="panel guide-card"><div className="guide-card__head"><span><ShieldCheck size={23} /></span><div><h2>企微应用为什么会需要补位？</h2><p>企业可信 IP 是安全限制。</p></div></div><div className="guide-card__body"><p>EasyNotice 先尝试企微应用。如果公网 IP 变化导致鉴权失败，它会把失败原因记下来，然后立刻尝试下一顺位的企微群机器人。</p><ol><li>添加“企业微信应用”并测试</li><li>再添加“企业微信群机器人”并测试</li><li>在入口详情中选择“失败后补位”</li><li>把应用排第一，机器人排第二</li></ol><Link to="/channels" className="text-link">配置通知出口<ArrowRight size={15} /></Link></div></section>
-      <section className="panel guide-card"><div className="guide-card__head"><span><DeviceMobile size={23} /></span><div><h2>Bark 是什么？</h2><p>给 iPhone 的简洁推送工具。</p></div></div><div className="guide-card__body"><p>在 iPhone 安装 Bark 后，应用首页会显示一条专属推送地址。EasyNotice 只需要末尾的 Key，就能发送标题、正文、声音、分组和点击链接。</p><ol><li>在 iPhone 安装并打开 Bark</li><li>复制首页显示的推送 URL</li><li>把 URL 最后一段填入 Bark Key</li><li>发送测试消息并允许系统通知</li></ol><Link to="/channels" className="text-link">添加 Bark<ArrowRight size={15} /></Link></div></section>
+      <section className="panel guide-card"><div className="guide-card__head"><span><DeviceMobile size={23} /></span><div><h2>Bark 是什么？</h2><p>给 iPhone 的简洁推送工具。</p></div></div><div className="guide-card__body"><p>在 iPhone 安装 Bark 后，应用首页会显示一条专属推送地址。EasyNotice 只需要末尾的 Key，就能发送标题、正文、声音、分组和点击链接。</p><ol><li>在 iPhone 安装并打开 Bark</li><li>复制首页显示的推送 URL</li><li>把 URL 最后一段填入 Bark Key</li><li>发送图文预览并允许系统通知</li></ol><Link to="/channels" className="text-link">添加 Bark<ArrowRight size={15} /></Link></div></section>
     </div>
 
     <section className="panel section-block faq-list"><div className="panel__header"><div><h2>常见问题</h2><p>遇到问题时先看通知记录，那里会显示具体失败在哪一步。</p></div></div>

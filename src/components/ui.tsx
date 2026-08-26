@@ -61,7 +61,7 @@ const statusMap: Record<string, { label: string; tone: string }> = {
   failed: { label: '发送失败', tone: 'danger' },
   pending: { label: '等待发送', tone: 'neutral' },
   processing: { label: '正在发送', tone: 'info' },
-  untested: { label: '尚未测试', tone: 'neutral' },
+  untested: { label: '尚未验证', tone: 'neutral' },
   archived: { label: '已停用', tone: 'neutral' },
   skipped: { label: '未启用备用', tone: 'neutral' },
   sending: { label: '正在发送', tone: 'info' },
