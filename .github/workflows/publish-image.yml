@@ -116,6 +116,6 @@ jobs:
 
           test "$(stat -c '%u' "$data_dir/uploads")" = "1000"
           docker exec "$container" node -e \
-            "fetch('http://0.0.0.0:18088/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
+            "fetch('http://127.0.0.1:18088/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
           docker exec "$container" sh -c \
             'test "$(awk "/^Uid:/ { print \$2 }" /proc/1/status)" = "1000"'

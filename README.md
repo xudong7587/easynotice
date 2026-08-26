@@ -35,7 +35,7 @@ EasyNotice 是面向 NAS 用户的统一通知 Docker。它把不同容器发来
 4. 打开 GitHub 仓库的 Packages 页面。如果希望 NAS 免登录拉取，把该 Package 的可见性设置为 Public。
 5. 复制 `.env.example` 为 `.env`，把镜像地址改成自己的地址。
 
-官方 Compose 只拉取公开的独立镜像，不依赖源码目录、Node.js 或开发电脑。服务在容器内明确监听 `0.0.0.0:18088`，默认通过 NAS 的 `18088` 端口向局域网开放。可以在 `.env` 中用 `EASYNOTICE_PORT` 修改 NAS 侧端口。
+官方 Compose 只拉取公开的独立镜像，不依赖源码目录、Node.js 或开发电脑。服务在容器内明确监听 `0.0.0.0:18088`，宿主机端口也明确绑定到 `0.0.0.0`，默认通过 NAS 的 `18088` 端口向全部 IPv4 局域网网卡开放。可以在 `.env` 中用 `EASYNOTICE_PORT` 修改 NAS 侧端口。
 
 ```bash
 cp .env.example .env
@@ -69,6 +69,38 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```text
 http://你的NAS地址:18088
 ```
+
+### 反代能打开、局域网 IP 却打不开
+
+先在地址栏明确输入 `http://NAS局域网IP:18088/health`，不要写成 `https://`。如果外网反向代理正常，说明 EasyNotice 进程和网页通常都已经启动；此时最常见的是旧容器尚未重建、宿主机端口只监听回环地址，或 NAS 防火墙阻止局域网直接访问该端口。
+
+先在 NAS 的终端依次检查：
+
+```bash
+docker compose pull
+docker compose up -d --force-recreate
+docker compose ps
+docker port easynotice 18088
+curl http://127.0.0.1:18088/health
+```
+
+正常时应看到类似 `0.0.0.0:18088->18088/tcp` 或 `0.0.0.0:18088` 的端口映射，并收到包含 `"status":"ok"` 的健康检查结果。若 `docker compose ps` 显示的不是 `0.0.0.0`，检查正在使用的 Compose 文件和 `.env`：
+
+```dotenv
+EASYNOTICE_PORT=18088
+EASYNOTICE_BIND_IP=0.0.0.0
+```
+
+如果 NAS 本机的 `curl` 成功，但同一局域网设备访问 `http://192.168.11.239:18088/health` 失败，问题已经位于 EasyNotice 容器之外。请在 NAS 防火墙或安全套件中允许来源局域网（例如 `192.168.11.0/24`）访问 TCP `18088`，并检查访客 Wi-Fi、AP 隔离、VLAN 或路由访问控制。反向代理仍能工作并不能排除这种情况，因为反向代理通常从 NAS 本机回环地址或 Docker 内部网络访问容器，不会经过局域网入站防火墙。
+
+如果 NAS 本机的 `curl` 也失败，查看容器状态和日志：
+
+```bash
+docker compose ps
+docker compose logs --tail=100 easynotice
+```
+
+端口被占用时容器通常无法启动；数据目录权限或数据库启动失败也会直接出现在日志里。
 
 首次进入会要求：
 
@@ -122,9 +154,10 @@ https://api.day.app/你的设备Key/
 
 在 EasyNotice 中添加 Bark 时填写：
 
-- Bark Key：地址最后一段
+- Bark Key：可直接粘贴 Bark 首页的完整测试地址，EasyNotice 会自动拆分；手工填写时使用服务器域名后的第一段设备 Key
 - Bark 服务器：默认 `https://api.day.app`，也可以填写自建服务
 - 分组：例如 `EasyNotice`
+- 通知铃声：可选，例如 `minuet`
 - 时效级别：普通、时效通知或静默
 
 EasyNotice 会发送标题、正文、分组、点击链接和公网图片图标。本地上传的图片不能直接充当 Bark `icon`，因为 Bark 服务必须能够从公网访问图片地址。
