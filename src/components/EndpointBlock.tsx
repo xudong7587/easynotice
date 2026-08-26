@@ -1,8 +1,13 @@
 import type { Recipe, Source } from '../types';
 import { CopyButton } from './ui';
 import { WebhookTemplatePicker } from './WebhookTemplatePicker';
+import { OpenWrtPushBotSetup } from './OpenWrtPushBotSetup';
 
 export function EndpointBlock({ source, recipe }: { source: Source; recipe?: Recipe }) {
+  if (recipe?.setupMode === 'openwrt-pushbot') {
+    return <OpenWrtPushBotSetup endpointUrl={source.endpoint.url} />;
+  }
+
   return <div className="endpoint-block">
     <div className="copy-field"><div><small>接口地址</small><code>{source.endpoint.url}</code></div><CopyButton value={source.endpoint.url} /></div>
     <div className="endpoint-block__grid"><div><small>请求方法</small><strong>{source.endpoint.method}</strong></div><div><small>请求头 / 内容类型</small><strong>{source.endpoint.contentType}</strong></div></div>

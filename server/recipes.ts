@@ -22,6 +22,7 @@ export interface Recipe {
   steps: string[];
   tips: string[];
   searchTerms: string[];
+  setupMode?: 'openwrt-pushbot';
   webhookTemplates?: RecipeWebhookTemplate[];
 }
 
@@ -178,10 +179,10 @@ export const recipes: Recipe[] = [
   },
   {
     id: 'openwrt-istoreos',
-    name: 'OpenWrt / iStoreOS',
+    name: 'OpenWrt 全能推送 / PushBot',
     category: '网络与软路由',
-    summary: '通过微信推送或 PushBot 等通知插件，接收 IP、设备、负载、温度和登录安全事件。',
-    confidence: 'community',
+    summary: '生成一整段“自定义推送”配置，直接粘贴到 PushBot 的大文本框。',
+    confidence: 'verified',
     method: 'POST',
     contentType: 'application/json',
     pathStyle: 'hook',
@@ -191,15 +192,18 @@ export const recipes: Recipe[] = [
   "event": "openwrt_notice"
 }`,
     steps: [
-      '原版 OpenWrt 与 iStoreOS 没有统一的系统 Webhook 驱动；先安装与你固件版本匹配的 luci-app-wechatpush 或 luci-app-pushbot。',
-      '在插件的推送模式中选择“自定义 API / 自定义推送”，URL 使用上面的 EasyNotice 接口地址。',
-      '请求方式选择 POST、内容类型选择 application/json，并把上面的 JSON 作为自定义消息格式。',
-      '先用插件的测试按钮确认成功，再按需启用公网 IP、设备上下线、负载温度、Web/SSH 登录等事件。',
+      '打开 OpenWrt：服务 → 全能推送 → 基本设置，并勾选“启用”。',
+      '在“推送模式”下拉框选择“自定义推送”。页面没有单独的 URL 输入框，这是正常的。',
+      '清空“自定义推送”大文本框中的示例内容，点击上方“复制整段配置”，完整粘贴一次；不要拆分 URL、请求头和请求体。',
+      '保存并应用后，点击文本框下方“发送测试”。随后回到 EasyNotice 的通知记录确认已收到。',
+      '测试成功后，再到“推送内容”页勾选公网 IP、设备上下线、负载温度、Web/SSH 登录等需要的事件。',
     ],
     tips: [
-      'luci-app-pushbot 5.10 及以上仅支持 LuCI 23.05 及以上；旧固件需要选择插件的兼容版本。',
-      '如果插件只允许编辑 diy.json，请保留其中的 URL、Content-Type 和变量规则，把标题与正文映射为 title、content。',
+      '生成内容已包含 EasyNotice 地址、POST JSON、标题 ${1}、正文 ${2} 和旧版 PushBot 需要的格式字段，不需要再手工修改。',
+      'OpenWrt 必须能够访问配置中生成的 EasyNotice 地址；如果 EasyNotice 填的是仅浏览器可用的域名，请先确认路由器自身也能解析和访问。',
+      'luci-app-pushbot 5.10 及以上仅支持 LuCI 23.05 及以上；旧固件请选择相应的兼容版本。',
     ],
+    setupMode: 'openwrt-pushbot',
     searchTerms: ['openwrt', 'istore', 'istoreos', '软路由', 'pushbot', 'wechatpush', '全能推送', '自定义api'],
   },
   {

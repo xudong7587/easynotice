@@ -26,6 +26,7 @@ export interface Recipe {
   steps: string[];
   tips: string[];
   searchTerms: string[];
+  setupMode?: 'openwrt-pushbot';
   webhookTemplates?: RecipeWebhookTemplate[];
 }
 

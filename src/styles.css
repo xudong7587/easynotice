@@ -333,6 +333,16 @@ img { display: block; max-width: 100%; }
 .code-block__header { display: flex; align-items: center; justify-content: space-between; padding: 7px 8px 7px 13px; border-bottom: 1px solid #2b3831; color: #94a39b; font-size: 10.5px; }
 .code-block .button { border-color: #314238; background: #1b2720; color: #dbe8e1; }
 .code-block pre { overflow: auto; max-height: 250px; margin: 0; padding: 14px; font-size: 11.5px; line-height: 1.6; text-align: left; white-space: pre-wrap; }
+.pushbot-setup { display: grid; width: 100%; gap: 11px; text-align: left; }
+.pushbot-setup__intro { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 11px; padding: 13px 14px; border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border)); border-radius: var(--radius); background: var(--accent-soft); }
+.pushbot-setup__intro > span { display: flex; margin-top: 1px; color: var(--accent); }
+.pushbot-setup__intro small { display: block; margin-bottom: 3px; color: var(--accent-text); font-size: 11px; font-weight: 720; letter-spacing: .04em; }
+.pushbot-setup__intro strong { display: block; margin-bottom: 4px; font-size: 14px; }
+.pushbot-setup__intro p { margin: 0; color: var(--text-muted); font-size: 12px; line-height: 1.55; }
+.pushbot-config .code-block__header { gap: 10px; }
+.pushbot-config pre { max-height: 390px; }
+.pushbot-config__note { display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 9px 12px; border-top: 1px solid #2b3831; background: #18221d; color: #aebbb4; font-size: 11px; line-height: 1.5; }
+.pushbot-config__note svg { flex: none; margin-top: 1px; }
 .webhook-template-picker { display: grid; gap: 12px; padding-top: 4px; }
 .webhook-template-picker__heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; padding: 4px 1px 0; }
 .webhook-template-picker__heading > div { display: grid; gap: 3px; }
@@ -623,6 +633,8 @@ img { display: block; max-width: 100%; }
   .form-grid--2, .form-grid--3, .endpoint-block__grid, .recipe-grid, .webhook-template-options { grid-template-columns: 1fr; }
   .webhook-template-picker__heading { align-items: flex-start; flex-direction: column; gap: 5px; }
   .webhook-template-picker__heading p { text-align: left; }
+  .pushbot-config .code-block__header { align-items: stretch; flex-direction: column; }
+  .pushbot-config .code-block__header .button { width: 100%; }
   .channel-guide-fields dl > div { grid-template-columns: 1fr; gap: 2px; }
   .metrics-grid { grid-template-columns: 1fr; }
   .metric { border-right: 0; border-bottom: 1px solid var(--border); }

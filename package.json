@@ -1,6 +1,6 @@
 {
   "name": "easynotice",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "NAS unified notification ingress, routing and delivery manager",
   "type": "module",

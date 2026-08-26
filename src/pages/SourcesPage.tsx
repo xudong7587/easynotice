@@ -124,7 +124,7 @@ export function SourcesPage() {
   };
 
   return <div>
-    <PageHeader title="通知入口" description="每个 Docker 应用拥有独立地址。复制、测试、确认收到，不需要理解 Webhook 细节。" action={<Button onClick={start}><Plus size={17} />添加通知入口</Button>} />
+    <PageHeader title="通知入口" description="每个应用或设备拥有独立入口。选择对应预设，照着页面指引复制、测试，不需要理解 Webhook 细节。" action={<Button onClick={start}><Plus size={17} />添加通知入口</Button>} />
     {!sources ? <Skeleton lines={6} /> : sources.length ? <div className="source-list section-block">{sources.map((source) => {
       const sourceRecipe = recipes.find((item) => item.id === source.recipeId);
       return <article className={`source-row ${!source.enabled ? 'is-disabled' : ''}`} key={source.id}>
@@ -133,7 +133,7 @@ export function SourcesPage() {
         <div className="source-row__endpoint"><code>{source.endpoint.url}</code><button type="button" className="icon-button" aria-label="复制接口地址" onClick={() => { void navigator.clipboard.writeText(source.endpoint.url); toast.success('接口地址已复制'); }}><Copy size={17} /></button></div>
         <div className="source-row__actions"><Link to={`/sources/${source.id}`}><Button variant="secondary" size="sm">配置<ArrowRight size={15} /></Button></Link>{source.enabled ? <Button variant="quiet" size="sm" onClick={() => void archive(source)}><Archive size={15} />停用</Button> : <Button variant="quiet" size="sm" onClick={() => void remove(source)}><Trash size={15} />删除</Button>}</div>
       </article>;
-    })}</div> : <EmptyState icon={<WebhooksLogo size={38} />} title="还没有 Docker 接入" description="选择项目名称后，EasyNotice 会生成可以直接复制的地址、请求头和请求体。" action={<Button onClick={start}><Plus size={17} />接入第一个应用</Button>} />}
+    })}</div> : <EmptyState icon={<WebhooksLogo size={38} />} title="还没有通知来源" description="选择项目或设备名称后，EasyNotice 会按它真实的配置页面生成专用指引。" action={<Button onClick={start}><Plus size={17} />接入第一个来源</Button>} />}
 
     <DialogShell open={open} onOpenChange={setOpen} title={step === 'done' ? '入口已经准备好' : step === 'ai' ? 'AI 配置助手' : '添加通知入口'} description={step === 'choose' ? '先告诉 EasyNotice 是哪个应用，其余内容会自动准备。' : step === 'configure' ? '选择通知会从哪些渠道发出。' : undefined} size="xl" footer={step === 'configure' ? <><Button variant="secondary" onClick={() => setStep('choose')}><ArrowLeft size={16} />上一步</Button><Button type="submit" form="source-form" disabled={saving || !name}>{saving ? '正在创建…' : '创建入口'}<ArrowRight size={16} /></Button></> : step === 'done' ? <><Button variant="secondary" onClick={() => setOpen(false)}>完成</Button>{created ? <Link to={`/sources/${created.id}`} onClick={() => setOpen(false)}><Button>继续配置图片规则<ArrowRight size={16} /></Button></Link> : null}</> : undefined}>
       {step === 'choose' ? <div className="wizard-choose">
@@ -158,7 +158,7 @@ export function SourcesPage() {
         <fieldset className="field-group"><legend>通知出口</legend>{channels.length ? <div className="route-options">{channels.map((channel, index) => { const meta = channelMeta[channel.type]; const Icon = meta.icon; const selected = channelIds.includes(channel.id); return <label className={`route-option ${selected ? 'is-selected' : ''}`} key={channel.id}><input type="checkbox" checked={selected} onChange={() => toggleChannel(channel.id)} /><span className="channel-logo"><Icon size={19} /></span><span><strong>{channel.name}</strong><small>{routeMode === 'failover' && selected ? `顺位 ${channelIds.indexOf(channel.id) + 1}` : meta.short}</small></span>{selected ? <Check size={17} weight="bold" /> : null}</label>; })}</div> : <Callout tone="warning">还没有可用通知出口。可以先创建入口，之后再到详情页添加路由。</Callout>}</fieldset>
       </form> : null}
 
-      {step === 'done' && created ? <div className="wizard-done"><div className="success-orb"><Check size={30} weight="bold" /></div><div><h2>{created.name} 已经可以接收通知</h2><p>将下面内容粘贴到原应用。保存后先发一条测试，在通知记录中确认字段是否识别正确。</p></div><EndpointBlock source={created} recipe={recipe} />{recipe ? <div className="setup-steps"><h3>在 {recipe.name} 中这样填写</h3>{recipe.steps.map((item, index) => <div key={item}><span>{index + 1}</span><p>{item}</p></div>)}</div> : null}</div> : null}
+      {step === 'done' && created ? <div className="wizard-done"><div className="success-orb"><Check size={30} weight="bold" /></div><div><h2>{created.name} 已经可以接收通知</h2><p>{recipe?.setupMode === 'openwrt-pushbot' ? '复制下面整段配置，粘贴到 OpenWrt 的“自定义推送”大文本框。保存后点一次“发送测试”。' : '将下面内容粘贴到原应用。保存后先发一条测试，在通知记录中确认字段是否识别正确。'}</p></div><EndpointBlock source={created} recipe={recipe} />{recipe ? <div className="setup-steps"><h3>在 {recipe.name} 中这样填写</h3>{recipe.steps.map((item, index) => <div key={item}><span>{index + 1}</span><p>{item}</p></div>)}</div> : null}</div> : null}
     </DialogShell>
   </div>;
 }
