@@ -9,6 +9,7 @@ import type {
   WeComAppConfig,
   WeComRobotConfig,
 } from './types.js';
+import { redactSensitiveText } from './security.js';
 
 export interface DeliveryResult {
   httpStatus?: number;
@@ -28,7 +29,7 @@ function escapeHtml(value: string): string {
 
 function excerpt(value: unknown): string {
   const text = typeof value === 'string' ? value : JSON.stringify(value);
-  return text.replace(/[\r\n]+/g, ' ').slice(0, 500);
+  return redactSensitiveText(text.replace(/[\r\n]+/g, ' ').slice(0, 500));
 }
 
 async function request(url: string, init: RequestInit): Promise<{ response: Response; data: unknown }> {
@@ -107,15 +108,19 @@ async function deliverWeComRobot(config: WeComRobotConfig, notice: NoticeForDeli
   const url = ensureHttpUrl(config.webhookUrl, '机器人 Webhook').toString();
 
   if (notice.imageAssetPath && fs.existsSync(notice.imageAssetPath)) {
-    const bytes = fs.readFileSync(notice.imageAssetPath);
-    if (bytes.byteLength > 2 * 1024 * 1024) throw new Error('企业微信机器人图片不能超过 2 MB');
-    if (!['image/jpeg', 'image/png'].includes(notice.imageMimeType || '')) {
-      throw new Error('企业微信机器人图片仅支持 JPG 或 PNG，请在通知规则中重新上传');
+    if (!notice.imageAssetUrl) {
+      throw new Error('企业微信机器人图文消息需要先在系统设置中填写可公网访问的 EasyNotice 外部地址');
     }
-    const md5 = await import('node:crypto').then(({ createHash }) => createHash('md5').update(bytes).digest('hex'));
-    await postWeComRobot(url, {
-      msgtype: 'image',
-      image: { base64: bytes.toString('base64'), md5 },
+    return postWeComRobot(url, {
+      msgtype: 'news',
+      news: {
+        articles: [{
+          title: notice.title.slice(0, 128),
+          description: notice.body.slice(0, 512),
+          url: notice.linkUrl || notice.imageAssetUrl,
+          picurl: notice.imageAssetUrl,
+        }],
+      },
     });
   } else if (notice.imageUrl) {
     await postWeComRobot(url, {
@@ -198,17 +203,30 @@ async function deliverWeComApp(config: WeComAppConfig, notice: NoticeForDelivery
   const token = await getWeComToken(config);
   if (notice.imageAssetPath && fs.existsSync(notice.imageAssetPath)) {
     const mediaId = await uploadWeComImage(token, notice.imageAssetPath, notice.imageMimeType);
-    await sendWeComAppMessage(token, config, { msgtype: 'image', image: { media_id: mediaId } });
+    const content = `<p>${escapeHtml(notice.body).replaceAll('\n', '<br>')}</p><p>来源：${escapeHtml(notice.sourceName)}</p>`;
+    return sendWeComAppMessage(token, config, {
+      msgtype: 'mpnews',
+      mpnews: {
+        articles: [{
+          title: truncateUtf8(notice.title, 128),
+          thumb_media_id: mediaId,
+          author: truncateUtf8('EasyNotice', 64),
+          content_source_url: notice.linkUrl || undefined,
+          content,
+          digest: truncateUtf8(notice.body, 512),
+        }],
+      },
+    });
   }
 
-  if (notice.imageUrl && notice.linkUrl) {
+  if (notice.imageUrl) {
     return sendWeComAppMessage(token, config, {
       msgtype: 'news',
       news: {
         articles: [{
           title: notice.title.slice(0, 128),
           description: notice.body.slice(0, 512),
-          url: notice.linkUrl,
+          url: notice.linkUrl || notice.imageUrl,
           picurl: notice.imageUrl,
         }],
       },
@@ -286,7 +304,7 @@ async function deliverBark(config: BarkConfig, notice: NoticeForDelivery): Promi
     sound: config.sound || undefined,
     level: config.level || 'active',
     url: notice.linkUrl,
-    icon: notice.imageUrl,
+    icon: notice.imageUrl || notice.imageAssetUrl,
   };
   const { response, data } = await request(`${base}/${encodeURIComponent(config.deviceKey)}`, {
     method: 'POST',

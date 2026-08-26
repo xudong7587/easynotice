@@ -7,6 +7,7 @@ import { deliverToChannel } from '../channels.js';
 import { maskChannelConfig, parseChannelConfig } from '../validation.js';
 import type { ChannelConfig, ChannelType, NoticeForDelivery } from '../types.js';
 import { requestBaseUrl } from '../url.js';
+import { redactSensitiveText } from '../security.js';
 
 const router = Router();
 
@@ -144,7 +145,7 @@ router.post('/:id/test', async (request, response, next) => {
     `).run(Date.now(), Date.now(), row.id);
     response.json({ ok: true, durationMs: Date.now() - startedAt, detail: result.responseExcerpt });
   } catch (error) {
-    const message = error instanceof Error ? error.message : '测试发送失败';
+    const message = redactSensitiveText(error instanceof Error ? error.message : '测试发送失败');
     db.prepare(`UPDATE channels SET last_status = 'failed', last_error = ?, updated_at = ? WHERE id = ?`)
       .run(message.slice(0, 800), Date.now(), row.id);
     next(Object.assign(new Error(message), { statusCode: 502 }));

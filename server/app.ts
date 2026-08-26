@@ -10,6 +10,8 @@ import { webhookRouter } from './webhook.js';
 import { weComCallbackRouter } from './wecom-callback.js';
 import { db } from './db.js';
 import { isProduction, maxJsonBody } from './config.js';
+import { publicMediaRouter } from './media.js';
+import { redactSensitiveText } from './security.js';
 
 export function createApp() {
   const app = express();
@@ -46,6 +48,7 @@ export function createApp() {
 
   app.use(webhookRouter);
   app.use(weComCallbackRouter);
+  app.use(publicMediaRouter);
   app.use('/api', authRouter);
   app.use('/api', requireAuth, apiRouter);
 
@@ -77,8 +80,8 @@ export function createApp() {
       return;
     }
     const status = Number((error as { statusCode?: number }).statusCode || 500);
-    const message = error instanceof Error ? error.message : '服务内部错误';
-    if (status >= 500) console.error('[EasyNotice]', error);
+    const message = redactSensitiveText(error instanceof Error ? error.message : '服务内部错误');
+    if (status >= 500) console.error('[EasyNotice]', redactSensitiveText(error instanceof Error ? error.stack || error.message : String(error)));
     response.status(status).json({ error: status >= 500 && !message ? '服务内部错误' : message });
   };
   app.use(errorHandler);

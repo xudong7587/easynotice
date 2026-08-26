@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { Router } from 'express';
 import { nanoid } from 'nanoid';
-import { decryptSecret } from './crypto.js';
+import { decryptSecret, encryptSecret } from './crypto.js';
 import { db } from './db.js';
 import type { WeComAppConfig } from './types.js';
 
@@ -130,7 +130,7 @@ router.post('/callback/wecom/:channelId', (request, response) => {
       xmlValue(decrypted.message, 'MsgType'),
       eventType,
       fromUser,
-      decrypted.message.slice(0, 200_000),
+      encryptSecret(decrypted.message.slice(0, 200_000)),
       Date.now(),
     );
     response.status(200).end();

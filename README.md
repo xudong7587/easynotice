@@ -1,19 +1,19 @@
 # EasyNotice
 
-EasyNotice 是一个面向 NAS 和家庭服务器的统一通知中心。它接收 Lucky、MDC-NG、Uptime Kuma、Watchtower 等应用发来的 Webhook，统一整理标题、正文、图片和链接，再按规则发送到企业微信、Telegram 或 Bark。
+EasyNotice 是一个面向 NAS 和家庭服务器的统一通知中心。它接收 Lucky、OpenWrt / iStoreOS 通知插件、MoviePilot、Emby、MDC-NG、Uptime Kuma、Watchtower 等应用发来的 Webhook，统一整理标题、正文、图片和链接，再按规则发送到企业微信、Telegram 或 Bark。
 
-当前稳定版本：[`v0.1.4`](https://github.com/xudong7587/easynotice/releases/tag/v0.1.4)
+当前稳定版本：[`v0.1.5`](https://github.com/xudong7587/easynotice/releases/tag/v0.1.5)
 
 普通用户只需要 Docker Compose，不需要安装 Node.js，也不需要下载源码后自行构建镜像。
 
 ## 它能做什么
 
 - 接收 `POST`、`GET`、JSON、表单和纯文本 Webhook
-- 内置 Lucky、MDC-NG、Uptime Kuma、Watchtower / Shoutrrr 和通用 Webhook 预设
+- 内置通用 Webhook、Lucky、OpenWrt / iStoreOS、影视库中枢、影音与刮削、Uptime Kuma、Watchtower / Shoutrrr 预设
 - 自动识别 `title`、`subject`、`content`、`body`、`message`、`poster`、`thumb`、`url` 等常见字段
 - 发送到企业微信应用、企业微信群机器人、Telegram Bot 和 Bark
 - 企业微信应用可选接收成员消息和事件回调，自动验签、解密并留档
-- 支持“全部发送”和“主渠道失败后备用渠道补位”
+- 每个入口可勾选出口、单独测试，并选择“每个出口都发送”或“失败后按顺序补位”
 - 按通知内容匹配标题、正文、图片和链接规则
 - 保存每一次接收、匹配、重试和投递结果
 - SQLite 持久队列，容器重启后继续处理未完成通知
@@ -137,6 +137,10 @@ http://192.168.11.239:18088
 
 选择 Lucky 入口时，可以直接勾选 DDNS、STUN、设备上下线或计划任务等场景；页面会分别生成可复制的 JSON，并注明应粘贴到 Lucky 的哪个位置。端口转发和 Web 服务仅能通过计划任务定时报告规则开关状态，不等同于真实可用性检测。Lucky 当前没有原生的证书续签完成 Webhook，因此 EasyNotice 会明确标为不可直接配置，而不会生成虚假的开箱即用模板。
 
+OpenWrt 与 iStoreOS 本身没有统一的系统通知 Webhook。对应预设用于 `luci-app-wechatpush`、`luci-app-pushbot` 等支持自定义 API 的通知插件，页面会明确提示先安装匹配固件版本的插件。
+
+“影视库中枢”面向 MoviePilot、MediaIndex、NASTool 等订阅与整理工具。MoviePilot 可以使用官方 WebHook 插件直接填写 EasyNotice 地址；MediaIndex 和 NASTool 是否能直连取决于具体版本是否提供自定义 Webhook，只有企微机器人 Key 而没有自定义 URL 的版本不能直接替换地址。“影音与刮削”则面向 Emby、MDC-NG、Jellyfin、Plex 等播放、入库和刮削事件。
+
 ## 通知出口怎么选
 
 ### 企业微信群机器人
@@ -145,7 +149,7 @@ http://192.168.11.239:18088
 
 新版企业微信通常在目标内部群的“消息推送 → 自定义消息推送”中创建；旧版客户端中可能显示为“群机器人 → 添加机器人”。EasyNotice 的添加出口弹窗中有完整步骤和字段对照。
 
-EasyNotice 会自动选择企微机器人消息类型：普通通知发送纯文字；在通知规则中上传不超过 2 MB 的 JPG/PNG 时依次发送图片和文字；使用公网图片地址时发送图文卡片，点击卡片后打开通知链接，没有通知链接时则打开原图。机器人 Key 属于敏感凭证，不要公开。
+EasyNotice 会自动选择企微机器人消息类型：普通通知发送纯文字；匹配到本地或公网图片时发送一条图文卡片，点击卡片后打开通知链接，没有通知链接时则打开图片。本地图片会使用带签名的只读公网地址，因此系统设置中的 EasyNotice 外部地址必须能被企业微信访问。机器人 Key 属于敏感凭证，不要公开。
 
 ### 企业微信应用
 
@@ -159,6 +163,8 @@ EasyNotice 会自动选择企微机器人消息类型：普通通知发送纯文
 
 企业可信 IP 应填写 NAS 访问互联网时使用的公网出口 IP，不是 `192.168.x.x` 局域网地址。如果公网 IP 经常变化，推荐同时添加群机器人作为备用出口。
 
+企微应用匹配到本地图片时，会先上传临时素材，再用 `mpnews` 合成为一条包含缩略图、标题和正文的图文消息，不再拆成一条文字和一条图片；使用公网图片时发送普通图文卡片。
+
 EasyNotice 的企业微信应用出口默认只负责主动发送通知。因此在不启用交互回调时，企业微信后台“接收消息 → 设置 API 接收”中的回调 URL、Token、EncodingAESKey 均不需要填写，网页授权回调域也不是发送通知的必要配置。保存出口并发送测试时，如果企业微信返回错误 `60020`，EasyNotice 会在错误详情中直接显示企微识别到的公网出口 IP；把这个 IP 加入“开发者接口 → 企业可信 IP”后再测试即可。
 
 如需为后续交互做准备，可以在保存企微应用出口后重新编辑，按需启用“接收消息与事件回调”。EasyNotice 会生成专属回调 URL，完成企业微信 GET 验证、签名校验和 AES 解密，并留存最近收到的消息或事件；当前版本不会自动回复成员。Token 与 EncodingAESKey 必须和企微后台完全一致，配置时先保存 EasyNotice，再在企微后台保存验证。回调地址必须能从公网访问，建议使用标准 HTTPS 443。
@@ -171,7 +177,7 @@ EasyNotice 的企业微信应用出口默认只负责主动发送通知。因此
 
 适合推送到个人 iPhone。可以把 Bark 首页显示的完整测试地址直接粘贴到“Bark Key”，EasyNotice 会自动拆分服务器地址和设备 Key。
 
-还可以设置通知分组、铃声和时效级别。远程图片图标必须能被 Bark 服务器从公网访问，本地上传素材不能直接充当 Bark 图标。
+还可以设置通知分组、铃声和时效级别。远程图片或本地素材的带签名地址都必须能被 Bark 服务器从公网访问，才能显示为通知图标。
 
 ## 企业微信主备补位
 
@@ -204,7 +210,7 @@ docker compose ps
 把 Compose 中的镜像标签从 `latest` 改为固定版本：
 
 ```yaml
-image: ghcr.io/xudong7587/easynotice:v0.1.4
+image: ghcr.io/xudong7587/easynotice:v0.1.5
 ```
 
 再执行：
@@ -241,6 +247,8 @@ volumes:
 ```text
 data/
 ├── easynotice.db
+├── easynotice.db-wal
+├── easynotice.db-shm
 ├── .installation-secret
 └── uploads/
 ```
@@ -250,6 +258,25 @@ data/
 - `uploads/`：上传的通知图片素材
 
 备份时必须复制整个 `data` 文件夹。只备份数据库而漏掉 `.installation-secret`，已经保存的企微 Secret、Bot Token 和其他加密配置将无法解密。
+
+默认模式兼顾开箱即用：`.installation-secret` 会以仅容器用户可读的权限保存在持久化目录。数据库中的企微 Secret、机器人 Key、Telegram Token、Bark Key、AI API Key、入口令牌、原始 Webhook 数据和企微回调原文均使用 AES-256-GCM 加密；管理密码使用 bcrypt，登录会话和入口令牌同时保存不可逆哈希。
+
+如果整份 `data` 目录被一并复制，目录中的主密钥仍可用于解密数据库。安全要求更高时，可把主密钥放在持久化目录之外，并只读挂载到容器：
+
+```yaml
+services:
+  easynotice:
+    environment:
+      EASYNOTICE_SECRET_FILE: /run/secrets/easynotice_master
+    secrets:
+      - easynotice_master
+
+secrets:
+  easynotice_master:
+    file: ./secrets/easynotice_master
+```
+
+密钥文件内容至少 32 个字符，生成后不能随意更换；否则已有加密配置无法读取。上面的加固是可选项，默认 Compose 不需要 `.env` 或额外密钥文件。
 
 为了得到一致的 SQLite 备份，建议短暂停止服务后再复制：
 
@@ -414,13 +441,17 @@ AI 助手不是通知链路的必需组件。即使没有配置 AI，所有入�
 
 - 管理 API 登录后才能访问
 - 会话 Cookie 使用 `HttpOnly` 和 `SameSite=Strict`
-- 渠道密钥和 AI API Key 使用 AES-256-GCM 加密
+- 渠道密钥、AI API Key、入口令牌、原始请求数据和企微回调原文使用 AES-256-GCM 加密
+- Webhook 中名为 token、secret、password、key、authorization、cookie 等字段会在入库前脱敏
+- 数据目录默认使用 `0700`，数据库、主密钥和上传文件默认使用 `0600`；不支持 POSIX 权限的 NAS 文件系统需依赖共享文件夹 ACL
+- 通知标题、正文、事件类型、发送状态和必要的来源标识会以可检索形式保存；请不要把密码或密钥写进通知正文
 - 每个通知入口使用独立随机密钥，可随时更换
 - 更换入口密钥后旧地址立即失效
 - 图片上传限制为 4 MB，只接受 PNG、JPEG、WebP 和 GIF
 - 企业微信图片按 2 MB 上限校验
 - 默认不要求公网暴露管理页面
 - 反向代理到公网时应启用 HTTPS 和安全 Cookie
+- 本地图片供企微机器人或 Bark 拉取时使用不可猜测的签名只读地址，素材管理接口仍需要登录
 
 ## 查看状态和日志
 

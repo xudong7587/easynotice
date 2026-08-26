@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { wakeWorker } from '../worker.js';
+import { decryptStoredData } from '../crypto.js';
 
 const router = Router();
 
@@ -89,7 +90,7 @@ router.get('/:id', (request, response) => {
   response.json({
     event: {
       ...serializeEvent(row),
-      raw: JSON.parse(String(row.raw_json || '{}')),
+      raw: decryptStoredData<Record<string, unknown>>(String(row.raw_json || '{}')),
       requestId: row.request_id,
       deliveries: deliveries.map((delivery) => ({
         id: delivery.id,

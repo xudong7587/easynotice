@@ -1,10 +1,12 @@
 import path from 'node:path';
 import { nanoid } from 'nanoid';
 import { db } from './db.js';
-import { decryptSecret } from './crypto.js';
+import { decryptSecret, decryptStoredData } from './crypto.js';
 import { uploadDir } from './config.js';
+import { publicAssetUrl } from './media.js';
 import { deliverToChannel } from './channels.js';
 import type { ChannelConfig, ChannelType, NoticeForDelivery, RouteMode } from './types.js';
+import { redactSensitiveText } from './security.js';
 
 interface EventRow {
   id: string;
@@ -29,6 +31,7 @@ interface RouteRow {
 }
 
 interface AssetRow {
+  id: string;
   stored_name: string;
   mime_type: string;
 }
@@ -68,7 +71,7 @@ function loadRoutes(sourceId: string): RouteRow[] {
 function loadAsset(event: EventRow): AssetRow | undefined {
   if (!event.matched_rule_id) return undefined;
   return db.prepare(`
-    SELECT a.stored_name, a.mime_type
+    SELECT a.id, a.stored_name, a.mime_type
     FROM rules r JOIN assets a ON a.id = r.image_asset_id
     WHERE r.id = ?
   `).get(event.matched_rule_id) as AssetRow | undefined;
@@ -85,8 +88,9 @@ function buildNotice(event: EventRow, sourceName: string): NoticeForDelivery {
     severity: event.severity,
     imageUrl: event.image_url || undefined,
     linkUrl: event.link_url || undefined,
-    raw: JSON.parse(event.raw_json) as Record<string, unknown>,
+    raw: decryptStoredData<Record<string, unknown>>(event.raw_json),
     imageAssetPath: asset ? path.join(uploadDir, asset.stored_name) : undefined,
+    imageAssetUrl: asset ? publicAssetUrl(asset.id) : undefined,
     imageMimeType: asset?.mime_type,
   };
 }
@@ -108,7 +112,7 @@ async function sendOne(event: EventRow, route: RouteRow, notice: NoticeForDelive
         UPDATE deliveries
         SET status = 'success', completed_at = ?, duration_ms = ?, http_status = ?, response_excerpt = ?
         WHERE id = ?
-      `).run(completedAt, completedAt - startedAt, result.httpStatus ?? null, result.responseExcerpt, deliveryId);
+      `).run(completedAt, completedAt - startedAt, result.httpStatus ?? null, redactSensitiveText(result.responseExcerpt), deliveryId);
       db.prepare(`
         UPDATE channels SET last_status = 'success', last_error = NULL, last_success_at = ?, updated_at = ?
         WHERE id = ?
@@ -116,7 +120,7 @@ async function sendOne(event: EventRow, route: RouteRow, notice: NoticeForDelive
       return true;
     } catch (error) {
       const completedAt = Date.now();
-      lastError = error instanceof Error ? error.message : '未知发送错误';
+      lastError = redactSensitiveText(error instanceof Error ? error.message : '未知发送错误');
       db.prepare(`
         UPDATE deliveries SET status = 'failed', completed_at = ?, duration_ms = ?, error = ?
         WHERE id = ?

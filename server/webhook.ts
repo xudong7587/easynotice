@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { nanoid } from 'nanoid';
 import { db } from './db.js';
-import { hashToken, safeEqualHash } from './crypto.js';
+import { encryptStoredData, hashToken, safeEqualHash } from './crypto.js';
 import { normalizeIncoming } from './normalize.js';
 import { applyFirstRule } from './templates.js';
 import type { RuleRow } from './types.js';
@@ -79,7 +79,7 @@ function receive(request: Request, response: Response): void {
       applied.notice.severity,
       applied.notice.imageUrl || null,
       applied.notice.linkUrl || null,
-      JSON.stringify(applied.notice.raw),
+      encryptStoredData(applied.notice.raw),
       applied.matchedRule?.id || null,
       now,
     );

@@ -1,5 +1,8 @@
+import fs from 'node:fs';
 import Database from 'better-sqlite3';
 import { dbPath } from './config.js';
+import { encryptSecret, encryptStoredData, isEncryptedPayload } from './crypto.js';
+import { redactSensitiveText } from './security.js';
 
 export const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
@@ -138,6 +141,34 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_wecom_callback_channel_received ON wecom_callback_events(channel_id, received_at DESC);
   CREATE UNIQUE INDEX IF NOT EXISTS idx_wecom_callback_message_id ON wecom_callback_events(channel_id, message_id) WHERE message_id IS NOT NULL;
 `);
+
+function protectDatabaseFiles(): void {
+  for (const file of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {
+    if (!fs.existsSync(file)) continue;
+    try { fs.chmodSync(file, 0o600); } catch { /* Best effort on NAS filesystems without POSIX modes. */ }
+  }
+}
+
+const protectLegacyPayloads = db.transaction(() => {
+  const events = db.prepare("SELECT id, raw_json FROM events WHERE raw_json NOT LIKE 'v1.%'")
+    .all() as Array<{ id: string; raw_json: string }>;
+  const updateEvent = db.prepare('UPDATE events SET raw_json = ? WHERE id = ?');
+  for (const event of events) {
+    let value: unknown;
+    try { value = JSON.parse(event.raw_json); } catch { value = { content: redactSensitiveText(event.raw_json) }; }
+    updateEvent.run(encryptStoredData(value), event.id);
+  }
+
+  const callbacks = db.prepare("SELECT id, raw_xml FROM wecom_callback_events WHERE raw_xml NOT LIKE 'v1.%'")
+    .all() as Array<{ id: string; raw_xml: string }>;
+  const updateCallback = db.prepare('UPDATE wecom_callback_events SET raw_xml = ? WHERE id = ?');
+  for (const callback of callbacks) {
+    if (!isEncryptedPayload(callback.raw_xml)) updateCallback.run(encryptSecret(callback.raw_xml), callback.id);
+  }
+});
+
+protectLegacyPayloads();
+protectDatabaseFiles();
 
 const now = Date.now();
 const insertSetting = db.prepare(`

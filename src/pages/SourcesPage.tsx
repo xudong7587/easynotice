@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  Archive,
   ArrowLeft,
   ArrowRight,
   Brain,
@@ -11,6 +12,7 @@ import {
   MagnifyingGlass,
   Plus,
   Sparkle,
+  Trash,
   WebhooksLogo,
 } from '@phosphor-icons/react';
 import { toast } from 'sonner';
@@ -99,6 +101,28 @@ export function SourcesPage() {
     setStep('configure');
   };
 
+  const archive = async (source: Source) => {
+    if (!window.confirm(`停用“${source.name}”？旧入口地址会立即停止接收通知。`)) return;
+    try {
+      await api(`/api/sources/${source.id}`, { method: 'DELETE' });
+      toast.success('通知入口已停用');
+      void load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '停用失败');
+    }
+  };
+
+  const remove = async (source: Source) => {
+    if (!window.confirm(`永久删除“${source.name}”？相关规则、通知记录和投递明细都会一并删除，此操作无法恢复。`)) return;
+    try {
+      await api(`/api/sources/${source.id}/permanent`, { method: 'DELETE' });
+      toast.success('通知入口已永久删除');
+      void load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '删除失败');
+    }
+  };
+
   return <div>
     <PageHeader title="通知入口" description="每个 Docker 应用拥有独立地址。复制、测试、确认收到，不需要理解 Webhook 细节。" action={<Button onClick={start}><Plus size={17} />添加通知入口</Button>} />
     {!sources ? <Skeleton lines={6} /> : sources.length ? <div className="source-list section-block">{sources.map((source) => {
@@ -107,7 +131,7 @@ export function SourcesPage() {
         <span className="source-row__icon"><Broadcast size={22} weight="duotone" /></span>
         <div className="source-row__main"><div className="source-row__title"><h2>{source.name}</h2><StatusBadge status={source.enabled ? (source.lastReceivedAt ? 'success' : 'untested') : 'archived'} label={source.enabled ? (source.lastReceivedAt ? '已收到数据' : '等待首条通知') : '已停用'} /></div><p>{sourceRecipe?.summary || '通用 Webhook 入口'}</p><div className="source-row__meta"><span>{source.routeMode === 'failover' ? '按顺序补位' : '同时发送'}</span><span>{source.channelIds.length} 个出口</span><span>最近收到：{timeAgo(source.lastReceivedAt)}</span></div></div>
         <div className="source-row__endpoint"><code>{source.endpoint.url}</code><button type="button" className="icon-button" aria-label="复制接口地址" onClick={() => { void navigator.clipboard.writeText(source.endpoint.url); toast.success('接口地址已复制'); }}><Copy size={17} /></button></div>
-        <Link to={`/sources/${source.id}`}><Button variant="secondary" size="sm">配置<ArrowRight size={15} /></Button></Link>
+        <div className="source-row__actions"><Link to={`/sources/${source.id}`}><Button variant="secondary" size="sm">配置<ArrowRight size={15} /></Button></Link>{source.enabled ? <Button variant="quiet" size="sm" onClick={() => void archive(source)}><Archive size={15} />停用</Button> : <Button variant="quiet" size="sm" onClick={() => void remove(source)}><Trash size={15} />删除</Button>}</div>
       </article>;
     })}</div> : <EmptyState icon={<WebhooksLogo size={38} />} title="还没有 Docker 接入" description="选择项目名称后，EasyNotice 会生成可以直接复制的地址、请求头和请求体。" action={<Button onClick={start}><Plus size={17} />接入第一个应用</Button>} />}
 

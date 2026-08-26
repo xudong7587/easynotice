@@ -5,6 +5,7 @@ import {
   BookOpenText,
   Broadcast,
   GearSix,
+  GithubLogo,
   Images,
   ListBullets,
   Moon,
@@ -28,6 +29,15 @@ const navigation = [
   { to: '/guide', label: '新手指南', icon: BookOpenText },
   { to: '/settings', label: '系统设置', icon: GearSix },
 ];
+
+const repositoryUrl = 'https://github.com/xudong7587/easynotice';
+
+function VersionLink() {
+  return <a className="version-link" href={repositoryUrl} target="_blank" rel="noreferrer" aria-label={`在 GitHub 查看 EasyNotice ${__APP_VERSION__}`}>
+    <GithubLogo size={17} weight="fill" />
+    <span>{__APP_VERSION__}</span>
+  </a>;
+}
 
 function Navigation({ onNavigate }: { onNavigate?: () => void }) {
   return (
@@ -86,6 +96,7 @@ export function AppShell({ onLoggedOut }: { onLoggedOut: () => void }) {
         <div className="sidebar__footer">
           <div className="service-state"><span />本地服务正常</div>
           <button type="button" className="navigation__item" onClick={logout}><SignOut size={20} />退出登录</button>
+          <VersionLink />
         </div>
       </aside>
 
@@ -114,6 +125,7 @@ export function AppShell({ onLoggedOut }: { onLoggedOut: () => void }) {
               </div>
               <Navigation onNavigate={() => setMobileOpen(false)} />
               <button type="button" className="navigation__item" onClick={logout}><SignOut size={20} />退出登录</button>
+              <VersionLink />
             </Dialog.Popup>
           </Dialog.Viewport>
         </Dialog.Portal>

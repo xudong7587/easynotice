@@ -27,6 +27,30 @@ export interface Recipe {
 
 export const recipes: Recipe[] = [
   {
+    id: 'generic',
+    name: '通用 Webhook',
+    category: '推荐先试',
+    summary: '不知道格式也没关系。先发一次，EasyNotice 会自动找标题、正文、图片和链接。',
+    confidence: 'generic',
+    method: 'POST',
+    contentType: 'application/json',
+    pathStyle: 'hook',
+    bodyTemplate: `{
+  "title": "通知标题",
+  "content": "这里填写通知内容",
+  "event": "default",
+  "image": "https://example.com/image.jpg",
+  "url": "https://example.com/detail"
+}`,
+    steps: [
+      '把接口地址粘贴到原应用的 Webhook URL。',
+      '请求方式优先选择 POST，格式优先选择 JSON。',
+      '发送测试后，在通知记录里检查识别结果。',
+    ],
+    tips: ['兼容 title/subject、content/body/message、image/poster/thumb、url/link 等常见字段。'],
+    searchTerms: ['webhook', '通用', '未知', '自定义'],
+  },
+  {
     id: 'lucky',
     name: 'Lucky',
     category: '网络与软路由',
@@ -153,10 +177,64 @@ export const recipes: Recipe[] = [
     ],
   },
   {
+    id: 'openwrt-istoreos',
+    name: 'OpenWrt / iStoreOS',
+    category: '网络与软路由',
+    summary: '通过微信推送或 PushBot 等通知插件，接收 IP、设备、负载、温度和登录安全事件。',
+    confidence: 'community',
+    method: 'POST',
+    contentType: 'application/json',
+    pathStyle: 'hook',
+    bodyTemplate: `{
+  "title": "\${1}",
+  "content": "\${2}",
+  "event": "openwrt_notice"
+}`,
+    steps: [
+      '原版 OpenWrt 与 iStoreOS 没有统一的系统 Webhook 驱动；先安装与你固件版本匹配的 luci-app-wechatpush 或 luci-app-pushbot。',
+      '在插件的推送模式中选择“自定义 API / 自定义推送”，URL 使用上面的 EasyNotice 接口地址。',
+      '请求方式选择 POST、内容类型选择 application/json，并把上面的 JSON 作为自定义消息格式。',
+      '先用插件的测试按钮确认成功，再按需启用公网 IP、设备上下线、负载温度、Web/SSH 登录等事件。',
+    ],
+    tips: [
+      'luci-app-pushbot 5.10 及以上仅支持 LuCI 23.05 及以上；旧固件需要选择插件的兼容版本。',
+      '如果插件只允许编辑 diy.json，请保留其中的 URL、Content-Type 和变量规则，把标题与正文映射为 title、content。',
+    ],
+    searchTerms: ['openwrt', 'istore', 'istoreos', '软路由', 'pushbot', 'wechatpush', '全能推送', '自定义api'],
+  },
+  {
+    id: 'media-hub',
+    name: '影视库中枢',
+    category: 'MoviePilot、MediaIndex、NASTool 等',
+    summary: '接收订阅、下载、整理、入库和任务失败等影视自动化通知。',
+    confidence: 'community',
+    method: 'POST',
+    contentType: 'application/json',
+    pathStyle: 'hook',
+    bodyTemplate: `{
+  "title": "影视库任务通知",
+  "content": "订阅、下载或入库结果",
+  "event": "media_task",
+  "image": "https://example.com/poster.jpg",
+  "url": "https://example.com/detail"
+}`,
+    steps: [
+      'MoviePilot：在插件市场安装官方 WebHook 插件，在插件设置中把第三方地址填写为上面的 EasyNotice 接口地址；插件会自动发送事件内容。',
+      'MediaIndex：如果当前版本提供“自定义 Webhook / 通知 URL”，选择 POST 与 JSON 后粘贴接口地址；如果页面只能填写企微机器人 Key，则该版本不能直接改成 EasyNotice 地址。',
+      'NASTool：官方内置通知以企微、Telegram 等渠道为主；只有安装支持自定义 Webhook 的插件或转发组件后，才填写 EasyNotice 地址。',
+      '发送一次真实的订阅、整理或入库测试，再到 EasyNotice 通知记录中确认标题、正文、海报和事件字段。',
+    ],
+    tips: [
+      'MoviePilot 的 WebHook 插件只需要 EasyNotice 入口地址，不要把 MoviePilot 的管理员 API_TOKEN 填到 EasyNotice。',
+      '不同版本发出的字段不完全一致；EasyNotice 可接收 JSON、表单和纯文本，第一次通知后再按实际事件添加图片规则。',
+    ],
+    searchTerms: ['moviepilot', 'movie pilot', 'mediaindex', 'media index', 'nastool', 'nas-tools', '订阅', '下载', '入库', '整理', '影视库'],
+  },
+  {
     id: 'mdc-ng',
-    name: 'MDC-NG',
-    category: '影音与刮削',
-    summary: '接收刮削完成、失败和媒体分类信息，可按事件配置不同图片。',
+    name: '影音与刮削',
+    category: 'Emby、MDC-NG 等',
+    summary: '接收播放、入库、刮削完成和失败事件，可按内容配置海报或状态图片。',
     confidence: 'verified',
     method: 'POST',
     contentType: 'application/json',
@@ -172,13 +250,13 @@ export const recipes: Recipe[] = [
   }
 }`,
     steps: [
-      '在 MDC-NG 通知设置中新增 Endpoint，名称可以写 EasyNotice。',
-      '请求方式选择 POST，URL 粘贴接口地址。',
-      '新增 Content-Type: application/json 请求头。',
-      'Body 模板粘贴提供的 JSON，可按需要勾选 finished 和 failed。',
+      'MDC-NG：在通知设置中新增 Endpoint，选择 POST，URL 粘贴接口地址，并使用下方 JSON 模板。',
+      'Emby：先在插件目录安装 Webhooks 通知服务，再到通知设置新增 Webhook 并粘贴接口地址；Emby 会自动生成请求体，不需要粘贴 MDC-NG 模板。',
+      'Jellyfin、Plex 或其他影音服务：找到 Webhook/Notifications 设置，优先选择 POST 与 JSON。',
+      '先触发一次播放、入库或刮削事件，在通知记录中确认实际字段后再添加匹配图片。',
     ],
-    tips: ['海报 poster 会自动作为图片；也可以在 EasyNotice 里按成功/失败覆盖图片。'],
-    searchTerms: ['mdc', 'mdc-ng', '刮削', '媒体', 'movie data capture'],
+    tips: ['MDC-NG 的 poster 会自动作为图片；Emby 等产品的 Webhook 格式由其插件版本决定，也可以在 EasyNotice 中按成功/失败覆盖图片。'],
+    searchTerms: ['mdc', 'mdc-ng', 'emby', 'jellyfin', 'plex', '刮削', '播放', '媒体', 'movie data capture'],
   },
   {
     id: 'uptime-kuma',
@@ -224,32 +302,8 @@ export const recipes: Recipe[] = [
     tips: ['只支持 URL 的程序也可以使用 GET：在地址后添加 ?title=标题&content=正文。'],
     searchTerms: ['watchtower', 'shoutrrr', 'docker', '更新'],
   },
-  {
-    id: 'generic',
-    name: '通用 Webhook',
-    category: '通用',
-    summary: '不知道格式也没关系。先发一次，EasyNotice 会自动找标题、正文、图片和链接。',
-    confidence: 'generic',
-    method: 'POST',
-    contentType: 'application/json',
-    pathStyle: 'hook',
-    bodyTemplate: `{
-  "title": "通知标题",
-  "content": "这里填写通知内容",
-  "event": "default",
-  "image": "https://example.com/image.jpg",
-  "url": "https://example.com/detail"
-}`,
-    steps: [
-      '把接口地址粘贴到原应用的 Webhook URL。',
-      '请求方式优先选择 POST，格式优先选择 JSON。',
-      '发送测试后，在通知记录里检查识别结果。',
-    ],
-    tips: ['兼容 title/subject、content/body/message、image/poster/thumb、url/link 等常见字段。'],
-    searchTerms: ['webhook', '通用', '未知', '自定义'],
-  },
 ];
 
 export function getRecipe(id: string): Recipe {
-  return recipes.find((recipe) => recipe.id === id) ?? recipes[recipes.length - 1];
+  return recipes.find((recipe) => recipe.id === id) ?? recipes.find((recipe) => recipe.id === 'generic')!;
 }

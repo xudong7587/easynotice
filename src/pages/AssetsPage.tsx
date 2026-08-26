@@ -27,7 +27,7 @@ export function AssetsPage() {
 
   return <div>
     <PageHeader title="图片素材" description="为不同 Docker、成功/失败事件准备易于辨认的图片。" action={<><input ref={input} hidden type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void upload(event.target.files?.[0])} /><Button onClick={() => input.current?.click()} disabled={uploading}><UploadSimple size={17} />{uploading ? '正在上传…' : '上传图片'}</Button></>} />
-    <Callout title="图片如何送达">本地上传的图片会以文件方式发送给 Telegram 和企业微信；Bark 的 icon 需要公网图片地址，可在规则中单独填写。</Callout>
+    <Callout title="图片如何送达">本地图片会在企业微信中合成为单条图文消息，在 Telegram 中作为带说明的图片发送；企微机器人和 Bark 会使用带签名的只读素材地址。</Callout>
     {!assets ? <Skeleton lines={6} /> : assets.length ? <div className="asset-grid section-block">{assets.map((asset) => <article className="asset-card" key={asset.id}><div className="asset-card__preview"><img src={asset.url} alt={asset.name} /></div><div className="asset-card__body"><div><strong title={asset.name}>{asset.name}</strong><small>{formatBytes(asset.size)} · {formatDate(asset.createdAt)}</small></div><button type="button" className="icon-button" aria-label={`删除 ${asset.name}`} onClick={() => void remove(asset)}><Trash size={17} /></button></div></article>)}</div> : <EmptyState icon={<ImageSquare size={38} />} title="素材库还是空的" description="上传 PNG、JPEG、WebP 或 GIF。图片会保存在 EasyNotice 的数据卷中。" action={<Button onClick={() => input.current?.click()}><Plus size={17} />上传第一张图片</Button>} />}
   </div>;
 }

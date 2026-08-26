@@ -1,4 +1,5 @@
 import type { NormalizedNotice } from './types.js';
+import { redactSensitiveData } from './security.js';
 
 export interface IncomingPayload {
   method: string;
@@ -104,10 +105,10 @@ function parseRawBody(body: unknown, rawText?: string): Record<string, unknown> 
 
 export function normalizeIncoming(input: IncomingPayload): NormalizedNotice {
   const rawBody = parseRawBody(input.body, input.rawText);
-  const merged: Record<string, unknown> = {
+  const merged = redactSensitiveData({
     ...(input.query ?? {}),
     ...rawBody,
-  };
+  }) as Record<string, unknown>;
   const flat = flatten(merged);
 
   let title = first(flat, aliases.title);

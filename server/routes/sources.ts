@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import { db } from '../db.js';
-import { decryptSecret, encryptSecret, hashToken, randomToken } from '../crypto.js';
+import { decryptSecret, encryptSecret, encryptStoredData, hashToken, randomToken } from '../crypto.js';
 import { getRecipe } from '../recipes.js';
 import { requestBaseUrl } from '../url.js';
 import { slugify } from '../validation.js';
@@ -194,7 +194,7 @@ router.post('/:id/test', (request, response) => {
   `).run(
     id, source.id, `manual-${nanoid(8)}`, applied.notice.title, applied.notice.body,
     applied.notice.eventType, applied.notice.severity, applied.notice.imageUrl || null,
-    applied.notice.linkUrl || null, JSON.stringify(applied.notice.raw), applied.matchedRule?.id || null, now,
+    applied.notice.linkUrl || null, encryptStoredData(applied.notice.raw), applied.matchedRule?.id || null, now,
   );
   wakeWorker();
   response.status(202).json({ ok: true, eventId: id });
@@ -207,6 +207,22 @@ router.delete('/:id', (request, response) => {
     return;
   }
   db.prepare('UPDATE sources SET enabled = 0, updated_at = ? WHERE id = ?').run(Date.now(), request.params.id);
+  response.json({ ok: true });
+});
+
+router.delete('/:id/permanent', (request, response) => {
+  const row = db.prepare('SELECT id, enabled FROM sources WHERE id = ?').get(request.params.id) as
+    | { id: string; enabled: number }
+    | undefined;
+  if (!row) {
+    response.status(404).json({ error: '通知入口不存在' });
+    return;
+  }
+  if (row.enabled) {
+    response.status(409).json({ error: '请先停用通知入口，再执行永久删除' });
+    return;
+  }
+  db.prepare('DELETE FROM sources WHERE id = ?').run(row.id);
   response.json({ ok: true });
 });
 

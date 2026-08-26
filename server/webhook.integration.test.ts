@@ -11,7 +11,11 @@ process.env.EASYNOTICE_SECRET = 'integration-test-secret-with-enough-entropy';
 process.env.NODE_ENV = 'test';
 
 let agent: ReturnType<typeof supertest.agent>;
-let database: { close: () => void };
+let publicClient: ReturnType<typeof supertest>;
+let database: {
+  close: () => void;
+  prepare: (sql: string) => { get: (...params: unknown[]) => unknown };
+};
 
 function encryptWeCom(message: string, encodingAesKey: string, receiveId: string): string {
   const aesKey = Buffer.from(`${encodingAesKey}=`, 'base64');
@@ -32,8 +36,10 @@ function callbackSignature(token: string, timestamp: string, nonce: string, encr
 
 beforeAll(async () => {
   const [{ createApp }, { db }] = await Promise.all([import('./app.js'), import('./db.js')]);
-  database = db;
-  agent = supertest.agent(createApp());
+  database = db as unknown as typeof database;
+  const app = createApp();
+  agent = supertest.agent(app);
+  publicClient = supertest(app);
   await agent.post('/api/setup').send({ password: 'test-password-123', baseUrl: 'http://nas.local:18088' }).expect(201);
 });
 
@@ -66,6 +72,60 @@ describe('webhook integration', () => {
     await agent.post('/hook/not-a-real-token').send({ title: '不应接收' }).expect(404);
   });
 
+  it('加密原始请求并在入库前隐藏入口令牌和业务密钥', async () => {
+    const created = await agent.post('/api/sources').send({
+      name: '安全测试', recipeId: 'generic', routeMode: 'failover', channelIds: [], enabled: true,
+    }).expect(201);
+    const legacyUrl = new URL(String(created.body.source.endpoint.legacyUrl));
+    const entryToken = legacyUrl.searchParams.get('token')!;
+    const sourceId = String(created.body.source.id);
+    const received = await agent.post(`${legacyUrl.pathname}${legacyUrl.search}`).send({
+      title: '安全存储测试',
+      content: '普通正文',
+      apiKey: 'business-api-key-must-not-leak',
+    }).expect(200);
+    const eventId = String(received.body.eventId);
+    const stored = database.prepare('SELECT raw_json FROM events WHERE id = ?').get(eventId) as { raw_json: string };
+
+    expect(stored.raw_json).toMatch(/^v1\./);
+    expect(stored.raw_json).not.toContain(entryToken);
+    expect(stored.raw_json).not.toContain('business-api-key-must-not-leak');
+    const storedSource = database.prepare('SELECT token_hash, token_encrypted FROM sources WHERE id = ?').get(sourceId) as { token_hash: string; token_encrypted: string };
+    expect(storedSource.token_encrypted).toMatch(/^v1\./);
+    expect(storedSource.token_encrypted).not.toContain(entryToken);
+    expect(storedSource.token_hash).not.toBe(entryToken);
+
+    const detail = await agent.get(`/api/events/${eventId}`).expect(200);
+    expect(detail.body.event.raw).toMatchObject({
+      token: '[已隐藏]',
+      apiKey: '[已隐藏]',
+      title: '安全存储测试',
+    });
+  });
+
+  it('只通过带签名的公开地址提供本地图片', async () => {
+    const uploaded = await agent.post('/api/assets')
+      .attach('image', Buffer.from('not-a-real-image-but-valid-upload-test'), { filename: 'notice.png', contentType: 'image/png' })
+      .expect(201);
+    const { publicAssetUrl } = await import('./media.js');
+    const signed = new URL(publicAssetUrl(String(uploaded.body.asset.id))!);
+
+    await publicClient.get(`${signed.pathname}${signed.search}`).expect(200).expect('Content-Type', /image\/png/);
+    await publicClient.get(`${signed.pathname.slice(0, signed.pathname.lastIndexOf('/') + 1)}invalid-signature`).expect(404);
+  });
+
+  it('永久删除前要求先停用通知入口', async () => {
+    const created = await agent.post('/api/sources').send({
+      name: '待删除入口', recipeId: 'generic', routeMode: 'failover', channelIds: [], enabled: true,
+    }).expect(201);
+    const sourceId = String(created.body.source.id);
+
+    await agent.delete(`/api/sources/${sourceId}/permanent`).expect(409);
+    await agent.delete(`/api/sources/${sourceId}`).expect(200);
+    await agent.delete(`/api/sources/${sourceId}/permanent`).expect(200);
+    await agent.get(`/api/sources/${sourceId}`).expect(404);
+  });
+
   it('永久删除前要求先停用通知出口', async () => {
     const created = await agent.post('/api/channels').send({
       name: '待删除机器人',
@@ -74,6 +134,9 @@ describe('webhook integration', () => {
       enabled: true,
     }).expect(201);
     const channelId = String(created.body.channel.id);
+    const encrypted = database.prepare('SELECT config_encrypted FROM channels WHERE id = ?').get(channelId) as { config_encrypted: string };
+    expect(encrypted.config_encrypted).toMatch(/^v1\./);
+    expect(encrypted.config_encrypted).not.toContain('693a91f6-example-key');
 
     await agent.delete(`/api/channels/${channelId}/permanent`).expect(409);
     await agent.delete(`/api/channels/${channelId}`).expect(200);
@@ -129,5 +192,8 @@ describe('webhook integration', () => {
       messageType: 'text',
       fromUser: 'user-1',
     });
+    const stored = database.prepare('SELECT raw_xml FROM wecom_callback_events WHERE channel_id = ?').get(channelId) as { raw_xml: string };
+    expect(stored.raw_xml).toMatch(/^v1\./);
+    expect(stored.raw_xml).not.toContain('你好');
   });
 });

@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deliverToChannel } from './channels.js';
 import { parseChannelConfig } from './validation.js';
@@ -37,6 +40,59 @@ describe('企业微信应用投递诊断', () => {
     await expect(deliverToChannel('wecom_app', config, notice)).rejects.toThrow(
       /公网出口 IP 203\.0\.113\.8.*接收消息.*EncodingAESKey/,
     );
+  });
+
+  it('把本地匹配图片和文字合成为一条 mpnews 图文消息', async () => {
+    const imagePath = path.join(os.tmpdir(), `easynotice-mpnews-${Date.now()}.png`);
+    fs.writeFileSync(imagePath, Buffer.from('test-image'));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ errcode: 0, access_token: 'token' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ errcode: 0, media_id: 'media-1' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ errcode: 0, errmsg: 'ok' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      await deliverToChannel('wecom_app', config, {
+        ...notice,
+        imageAssetPath: imagePath,
+        imageMimeType: 'image/png',
+      });
+    } finally {
+      fs.rmSync(imagePath, { force: true });
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const request = fetchMock.mock.calls[2]?.[1] as RequestInit;
+    expect(JSON.parse(String(request.body))).toMatchObject({
+      msgtype: 'mpnews',
+      mpnews: {
+        articles: [{
+          title: '测试通知',
+          thumb_media_id: 'media-1',
+          digest: '测试正文',
+          content: expect.stringContaining('测试正文'),
+        }],
+      },
+    });
+  });
+
+  it('把公网匹配图片发送为单条 news 图文卡片', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ errcode: 0, access_token: 'token' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ errcode: 0, errmsg: 'ok' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await deliverToChannel('wecom_app', config, {
+      ...notice,
+      imageUrl: 'https://example.com/poster.jpg',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const request = fetchMock.mock.calls[1]?.[1] as RequestInit;
+    expect(JSON.parse(String(request.body))).toMatchObject({
+      msgtype: 'news',
+      news: { articles: [{ picurl: 'https://example.com/poster.jpg' }] },
+    });
   });
 });
 
@@ -79,6 +135,35 @@ describe('企业微信机器人投递', () => {
     expect(JSON.parse(String(request.body))).toMatchObject({
       msgtype: 'news',
       news: { articles: [{ picurl: 'https://example.com/poster.jpg' }] },
+    });
+  });
+
+  it('使用带签名的本地素材地址发送单条图文卡片', async () => {
+    const imagePath = path.join(os.tmpdir(), `easynotice-robot-news-${Date.now()}.png`);
+    fs.writeFileSync(imagePath, Buffer.from('test-image'));
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ errcode: 0, errmsg: 'ok' }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      await deliverToChannel('wecom_robot', {
+        webhookUrl: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=example',
+      }, {
+        ...notice,
+        imageAssetPath: imagePath,
+        imageAssetUrl: 'https://notice.example/media/asset/signature',
+        imageMimeType: 'image/png',
+      });
+    } finally {
+      fs.rmSync(imagePath, { force: true });
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(JSON.parse(String(request.body))).toMatchObject({
+      msgtype: 'news',
+      news: { articles: [{ picurl: 'https://notice.example/media/asset/signature' }] },
     });
   });
 });

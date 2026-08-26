@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import {
   ArrowDown,
   ArrowLeft,
@@ -43,7 +43,6 @@ function emptyRule(priority: number): RuleDraft {
 
 export function SourceDetailPage() {
   const { id = '' } = useParams();
-  const navigate = useNavigate();
   const [source, setSource] = useState<Source>();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -52,6 +51,7 @@ export function SourceDetailPage() {
   const [routeIds, setRouteIds] = useState<string[]>([]);
   const [routeMode, setRouteMode] = useState<RouteMode>('failover');
   const [savingRoute, setSavingRoute] = useState(false);
+  const [testingChannelId, setTestingChannelId] = useState<string>();
   const [ruleOpen, setRuleOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<NoticeRule>();
   const [ruleDraft, setRuleDraft] = useState<RuleDraft>(emptyRule(0));
@@ -86,7 +86,7 @@ export function SourceDetailPage() {
   const toggle = (channelId: string) => setRouteIds((current) => current.includes(channelId) ? current.filter((item) => item !== channelId) : [...current, channelId]);
   const saveRoute = async () => {
     setSavingRoute(true);
-    try { const result = await api<{ source: Source }>(`/api/sources/${id}`, { method: 'PUT', body: JSON.stringify({ routeMode, channelIds: routeIds }) }); setSource(result.source); toast.success('主备路由已保存'); }
+    try { const result = await api<{ source: Source }>(`/api/sources/${id}`, { method: 'PUT', body: JSON.stringify({ routeMode, channelIds: routeIds }) }); setSource(result.source); toast.success('出口设置已保存'); }
     catch (error) { toast.error(error instanceof Error ? error.message : '保存失败'); }
     finally { setSavingRoute(false); }
   };
@@ -94,6 +94,18 @@ export function SourceDetailPage() {
     const toastId = toast.loading('正在生成一条入口测试通知');
     try { await api(`/api/sources/${id}/test`, { method: 'POST', body: '{}' }); toast.success('测试通知已进入发送队列', { id: toastId }); }
     catch (error) { toast.error(error instanceof Error ? error.message : '测试失败', { id: toastId }); }
+  };
+  const testChannel = async (channel: Channel) => {
+    setTestingChannelId(channel.id);
+    const toastId = toast.loading(`正在单独测试 ${channel.name}`);
+    try {
+      const result = await api<{ durationMs: number }>(`/api/channels/${channel.id}/test`, { method: 'POST', body: '{}' });
+      toast.success(`${channel.name} 测试成功，用时 ${result.durationMs} ms`, { id: toastId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '出口测试失败', { id: toastId });
+    } finally {
+      setTestingChannelId(undefined);
+    }
   };
   const regenerate = async () => {
     if (!window.confirm('重新生成后，原接口地址会立即失效。确定继续吗？')) return;
@@ -145,14 +157,14 @@ export function SourceDetailPage() {
 
       <aside className="detail-aside">
         <section className="panel route-editor">
-          <div className="panel__header"><div><h2>主备路由</h2><p>从上到下依次尝试</p></div></div>
-          <div className="segmented"><button type="button" className={routeMode === 'failover' ? 'is-active' : ''} onClick={() => setRouteMode('failover')}>失败后补位</button><button type="button" className={routeMode === 'broadcast' ? 'is-active' : ''} onClick={() => setRouteMode('broadcast')}>全部发送</button></div>
+          <div className="panel__header"><div><h2>出口设置</h2><p>勾选通知要发往的出口</p></div></div>
+          <div className="segmented"><button type="button" className={routeMode === 'failover' ? 'is-active' : ''} onClick={() => setRouteMode('failover')}>失败后按顺序补位</button><button type="button" className={routeMode === 'broadcast' ? 'is-active' : ''} onClick={() => setRouteMode('broadcast')}>每个出口都发送</button></div>
           <div className="route-editor__list">{channels.map((channel) => { const selected = routeIds.includes(channel.id); const index = routeIds.indexOf(channel.id); const meta = channelMeta[channel.type]; const Icon = meta.icon; return <div className={`route-editor__row ${selected ? 'is-selected' : ''}`} key={channel.id}>
             <label><input type="checkbox" checked={selected} onChange={() => toggle(channel.id)} /><span className="channel-logo"><Icon size={18} /></span><span><strong>{channel.name}</strong><small>{selected && routeMode === 'failover' ? `顺位 ${index + 1}` : meta.short}</small></span></label>
-            {selected && routeMode === 'failover' ? <div className="route-editor__moves"><button type="button" onClick={() => move(channel.id, -1)} disabled={index === 0} aria-label="上移"><ArrowUp size={15} /></button><button type="button" onClick={() => move(channel.id, 1)} disabled={index === routeIds.length - 1} aria-label="下移"><ArrowDown size={15} /></button></div> : null}
+            <div className="route-editor__actions"><button type="button" className="route-editor__test" onClick={() => void testChannel(channel)} disabled={testingChannelId === channel.id} aria-label={`单独测试 ${channel.name}`}><TestTube size={14} /><span>{testingChannelId === channel.id ? '测试中' : '测试'}</span></button>{selected && routeMode === 'failover' ? <div className="route-editor__moves"><button type="button" onClick={() => move(channel.id, -1)} disabled={index === 0} aria-label="上移"><ArrowUp size={15} /></button><button type="button" onClick={() => move(channel.id, 1)} disabled={index === routeIds.length - 1} aria-label="下移"><ArrowDown size={15} /></button></div> : null}</div>
           </div>; })}</div>
-          {routeMode === 'failover' && routeIds.length > 1 ? <Callout title="当前补位逻辑">{routeIds.map((channelId) => channels.find((channel) => channel.id === channelId)?.name).filter(Boolean).join(' → ')}</Callout> : null}
-          <Button onClick={saveRoute} disabled={savingRoute}><FloppyDisk size={16} />{savingRoute ? '正在保存…' : '保存路由'}</Button>
+          {routeMode === 'failover' && routeIds.length > 1 ? <Callout title="当前发送顺序">先尝试 {routeIds.map((channelId) => channels.find((channel) => channel.id === channelId)?.name).filter(Boolean).join('；失败后再尝试 ')}</Callout> : null}
+          <Button onClick={saveRoute} disabled={savingRoute}><FloppyDisk size={16} />{savingRoute ? '正在保存…' : '保存出口设置'}</Button>
         </section>
       </aside>
     </div>

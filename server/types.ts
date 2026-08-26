@@ -50,6 +50,7 @@ export interface NoticeForDelivery extends NormalizedNotice {
   eventId: string;
   sourceName: string;
   imageAssetPath?: string;
+  imageAssetUrl?: string;
   imageMimeType?: string;
 }
 

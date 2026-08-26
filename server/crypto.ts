@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { installationSecret } from './config.js';
+import { redactSensitiveData } from './security.js';
 
 const key = crypto.scryptSync(installationSecret, 'easynotice:v1', 32);
 
@@ -25,6 +26,19 @@ export function decryptSecret<T>(payload: string): T {
     decipher.final(),
   ]);
   return JSON.parse(decrypted.toString('utf8')) as T;
+}
+
+export function isEncryptedPayload(payload: string): boolean {
+  return /^v1\.[^.]+\.[^.]+\.[^.]+$/.test(payload);
+}
+
+export function encryptStoredData(value: unknown): string {
+  return encryptSecret(redactSensitiveData(value));
+}
+
+export function decryptStoredData<T>(payload: string): T {
+  if (isEncryptedPayload(payload)) return decryptSecret<T>(payload);
+  return JSON.parse(payload) as T;
 }
 
 export function hashToken(value: string): string {
