@@ -1,10 +1,10 @@
 services:
   easynotice:
-    image: ${EASYNOTICE_IMAGE:-ghcr.io/xudong7587/easynotice:latest}
+    image: ghcr.io/xudong7587/easynotice:latest
     container_name: easynotice
     restart: unless-stopped
     ports:
-      - "${EASYNOTICE_BIND_IP:-0.0.0.0}:${EASYNOTICE_PORT:-18088}:18088"
+      - "18088:18088"
     environment:
       TZ: Asia/Shanghai
       HOST: 0.0.0.0

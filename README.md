@@ -29,16 +29,15 @@ EasyNotice 是一个面向 NAS 和家庭服务器的统一通知中心。它接�
 
 这是普通用户的推荐部署方式。官方镜像同时支持 `linux/amd64` 和 `linux/arm64`。
 
-NAS 有终端时，可以直接下载仓库中的最新版 Compose 和环境变量示例：
+NAS 有终端时，可以直接下载仓库中的最新版 Compose 文件：
 
 ```bash
 mkdir -p easynotice
 cd easynotice
 curl -fsSL https://raw.githubusercontent.com/xudong7587/easynotice/main/docker-compose.yml -o docker-compose.yml
-curl -fsSL https://raw.githubusercontent.com/xudong7587/easynotice/main/.env.example -o .env
 ```
 
-下载完成后，可以直接跳到下面的“3. 启动”。使用 NAS 图形界面或希望手工核对配置时，按接下来的两步创建文件。
+下载完成后，可以直接跳到下面的“2. 启动”。使用 NAS 图形界面或希望手工核对配置时，按接下来的步骤创建文件。
 
 ### 1. 创建 Compose 项目
 
@@ -47,11 +46,11 @@ curl -fsSL https://raw.githubusercontent.com/xudong7587/easynotice/main/.env.exa
 ```yaml
 services:
   easynotice:
-    image: ${EASYNOTICE_IMAGE:-ghcr.io/xudong7587/easynotice:latest}
+    image: ghcr.io/xudong7587/easynotice:latest
     container_name: easynotice
     restart: unless-stopped
     ports:
-      - "${EASYNOTICE_BIND_IP:-0.0.0.0}:${EASYNOTICE_PORT:-18088}:18088"
+      - "18088:18088"
     environment:
       TZ: Asia/Shanghai
       HOST: 0.0.0.0
@@ -68,31 +67,16 @@ services:
 
 仓库中的 [`docker-compose.yml`](./docker-compose.yml) 就是当前维护中的官方版本。建议优先使用仓库文件，README 里的内容用于直接复制和核对。
 
-### 2. 创建 `.env`
+不需要创建 `.env`。要修改 NAS 对外端口，只改端口映射左边的数字。例如改用 `28088`：
 
-在同一文件夹保存下面的内容为 `.env`：
-
-```dotenv
-EASYNOTICE_IMAGE=ghcr.io/xudong7587/easynotice:latest
-EASYNOTICE_PORT=18088
-EASYNOTICE_BIND_IP=0.0.0.0
+```yaml
+ports:
+  - "28088:18088"
 ```
 
-三个变量的作用：
+右边的容器端口 `18088` 保持不变。
 
-| 变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `EASYNOTICE_IMAGE` | `ghcr.io/xudong7587/easynotice:latest` | 要部署的镜像版本 |
-| `EASYNOTICE_PORT` | `18088` | NAS 对局域网开放的端口 |
-| `EASYNOTICE_BIND_IP` | `0.0.0.0` | 监听 NAS 的全部 IPv4 网卡，局域网访问时不要改成 `127.0.0.1` |
-
-想固定版本、不随 `latest` 更新时，可以改为：
-
-```dotenv
-EASYNOTICE_IMAGE=ghcr.io/xudong7587/easynotice:v0.1.2
-```
-
-### 3. 启动
+### 2. 启动
 
 在 `docker-compose.yml` 所在目录执行：
 
@@ -126,10 +110,9 @@ http://192.168.11.239:18088
 
 1. 新建 Compose 项目或 Stack。
 2. 粘贴上面的 `docker-compose.yml`。
-3. 添加三个环境变量，或同时上传 `.env`。
-4. 确认项目目录中的 `./data` 会挂载到容器 `/app/data`。
-5. 部署项目，等待健康状态变为正常。
-6. 用 `http://NAS局域网IP:18088` 打开管理页面。
+3. 确认项目目录中的 `./data` 会挂载到容器 `/app/data`。
+4. 部署项目，等待健康状态变为正常。
+5. 用 `http://NAS局域网IP:18088` 打开管理页面。
 
 不建议在 NAS 图形界面中手工逐项创建一个普通容器。Compose 能完整保留端口、数据目录、健康检查和重启策略，后续更新也更容易复现。
 
@@ -209,10 +192,10 @@ docker compose ps
 
 ### 固定到某个版本
 
-在 `.env` 中设置固定标签：
+把 Compose 中的镜像标签从 `latest` 改为固定版本：
 
-```dotenv
-EASYNOTICE_IMAGE=ghcr.io/xudong7587/easynotice:v0.1.2
+```yaml
+image: ghcr.io/xudong7587/easynotice:v0.1.2
 ```
 
 再执行：
@@ -226,7 +209,7 @@ docker compose up -d --force-recreate
 
 ### 回退
 
-把 `.env` 中的镜像标签改回上一个版本，再重新拉取并创建容器：
+把 Compose 中的镜像标签改回上一个版本，再重新拉取并创建容器：
 
 ```bash
 docker compose pull
@@ -287,19 +270,12 @@ docker compose logs --tail=100 easynotice
 0.0.0.0:18088
 ```
 
-如果显示 `127.0.0.1:18088`，检查 `.env` 是否错误设置了：
+如果显示 `127.0.0.1:18088`，说明当前运行的不是仓库中的官方端口配置。确认 Compose 使用下面这行，然后强制重建容器：
 
-```dotenv
-EASYNOTICE_BIND_IP=127.0.0.1
+```yaml
+ports:
+  - "18088:18088"
 ```
-
-局域网部署应改回：
-
-```dotenv
-EASYNOTICE_BIND_IP=0.0.0.0
-```
-
-然后强制重建容器：
 
 ```bash
 docker compose up -d --force-recreate
