@@ -251,6 +251,34 @@ img { display: block; max-width: 100%; }
 .dialog__footer { display: flex; justify-content: flex-end; gap: 8px; padding: 13px 22px; border-top: 1px solid var(--border); background: var(--surface-subtle); }
 .dialog-form { display: grid; gap: 19px; }
 
+.channel-setup-guide { overflow: hidden; border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border)); border-radius: var(--radius); background: color-mix(in srgb, var(--accent-soft) 48%, var(--surface)); }
+.channel-setup-guide__heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 11px; padding: 15px 16px 14px; cursor: pointer; list-style: none; }
+.channel-setup-guide[open] .channel-setup-guide__heading { border-bottom: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border)); }
+.channel-setup-guide__heading::-webkit-details-marker { display: none; }
+.channel-setup-guide__heading > span { display: flex; width: 36px; height: 36px; align-items: center; justify-content: center; border-radius: 9px; background: var(--surface); color: var(--accent); }
+.channel-setup-guide__heading small { display: block; margin-bottom: 3px; color: var(--accent); font-size: 10px; font-weight: 720; letter-spacing: .06em; }
+.channel-setup-guide__heading h3 { margin-bottom: 4px; font-size: 14px; }
+.channel-setup-guide__heading p { margin: 0; color: var(--text-muted); font-size: 11.5px; line-height: 1.55; }
+.channel-setup-guide__caret { align-self: center; color: var(--text-soft); transition: transform 170ms var(--ease-out); }
+.channel-setup-guide[open] .channel-setup-guide__caret { transform: rotate(180deg); }
+.channel-guide-steps { display: grid; gap: 12px; margin: 0; padding: 15px 16px; list-style: none; }
+.channel-guide-steps li { display: grid; grid-template-columns: 23px minmax(0, 1fr); gap: 9px; }
+.channel-guide-steps li > span { display: flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 50%; background: var(--accent); color: #fff; font-size: 10px; font-weight: 750; }
+.channel-guide-steps strong { display: block; margin: 1px 0 3px; font-size: 12px; }
+.channel-guide-steps p { margin: 0; color: var(--text-muted); font-size: 11.5px; line-height: 1.6; }
+.channel-setup-guide code { padding: 1px 4px; border-radius: 4px; background: var(--surface-strong); color: var(--text); font-size: .92em; overflow-wrap: anywhere; }
+.channel-setup-guide a:not(.channel-guide-docs) { color: var(--accent); font-weight: 650; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 36%, transparent); text-underline-offset: 2px; }
+.channel-guide-fields { margin: 0 16px 14px; padding: 12px 13px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
+.channel-guide-fields > strong, .channel-guide-note > strong { display: block; margin-bottom: 8px; font-size: 11px; }
+.channel-guide-fields dl { display: grid; gap: 7px; margin: 0; }
+.channel-guide-fields dl > div { display: grid; grid-template-columns: minmax(120px, .7fr) minmax(0, 1.6fr); gap: 10px; }
+.channel-guide-fields dt { color: var(--text); font-size: 10.5px; font-weight: 650; }
+.channel-guide-fields dd { margin: 0; color: var(--text-muted); font-size: 10.5px; line-height: 1.5; }
+.channel-guide-note { margin: 0 16px 12px; padding: 0 2px; }
+.channel-guide-note > strong { margin-bottom: 3px; color: var(--warning); }
+.channel-guide-note p { margin: 0; color: var(--text-muted); font-size: 10.5px; line-height: 1.55; }
+.channel-guide-docs { margin: 0 16px 15px; font-size: 11.5px; }
+
 .wizard-choose { display: grid; gap: 14px; }
 .ai-entry { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 15px; border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border)); border-radius: var(--radius); background: var(--accent-soft); color: var(--text); cursor: pointer; text-align: left; transition: border-color 170ms ease, transform 150ms var(--ease-out); }
 .ai-entry:active { transform: scale(.985); }
@@ -552,6 +580,7 @@ img { display: block; max-width: 100%; }
 
 @media (max-width: 620px) {
   .form-grid--2, .form-grid--3, .endpoint-block__grid, .recipe-grid { grid-template-columns: 1fr; }
+  .channel-guide-fields dl > div { grid-template-columns: 1fr; gap: 2px; }
   .metrics-grid { grid-template-columns: 1fr; }
   .metric { border-right: 0; border-bottom: 1px solid var(--border); }
   .metric:nth-child(-n+3) { border-bottom: 1px solid var(--border); }

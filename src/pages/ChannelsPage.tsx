@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { formatDate } from '../lib/format';
 import type { Channel, ChannelType } from '../types';
 import { channelMeta } from '../components/channelMeta';
+import { ChannelSetupGuide } from '../components/ChannelSetupGuide';
 import { DialogShell } from '../components/DialogShell';
 import { Button, Callout, EmptyState, Field, Input, NativeSelect, PageHeader, Skeleton, StatusBadge } from '../components/ui';
 
@@ -34,21 +35,37 @@ function ChannelFields({ type, config, setConfig, editing }: { type: ChannelType
     <Callout>群机器人通常不依赖企业可信 IP，适合放在企微应用后面作为备用渠道。</Callout>
   </>;
   if (type === 'wecom_app') return <>
-    <div className="form-grid form-grid--2"><Field label="企业 ID (CorpID)" required><Input value={String(config.corpId || '')} onChange={(event) => set('corpId', event.target.value)} /></Field><Field label="应用 AgentId" required><Input inputMode="numeric" value={String(config.agentId || '')} onChange={(event) => set('agentId', event.target.value)} /></Field></div>
-    <Field label="应用 Secret" hint={secretHint} required><Input type="password" value={String(config.corpSecret || '')} onChange={(event) => set('corpSecret', event.target.value)} placeholder={editing ? '已保存，输入新 Secret 才会替换' : ''} required={!editing} /></Field>
+    <div className="form-grid form-grid--2"><Field label="企业 ID (CorpID)" hint="我的企业 → 企业信息 → 企业 ID" required><Input value={String(config.corpId || '')} onChange={(event) => set('corpId', event.target.value)} placeholder="wwxxxxxxxxxxxxxxxx" /></Field><Field label="应用 AgentId" hint="自建应用详情页中的数字 ID" required><Input inputMode="numeric" value={String(config.agentId || '')} onChange={(event) => set('agentId', event.target.value)} placeholder="1000002" /></Field></div>
+    <Field label="应用 Secret" hint={secretHint || '自建应用详情页 → Secret → 查看'} required><Input type="password" value={String(config.corpSecret || '')} onChange={(event) => set('corpSecret', event.target.value)} placeholder={editing ? '已保存，输入新 Secret 才会替换' : '应用 Secret（不要填写通讯录 Secret）'} required={!editing} /></Field>
     <div className="form-grid form-grid--2"><Field label="接收成员" hint="默认 @all，也可填写成员账号并用 | 分隔"><Input value={String(config.toUser || '')} onChange={(event) => set('toUser', event.target.value)} /></Field><Field label="接收部门" hint="可选，多个部门用 | 分隔"><Input value={String(config.toParty || '')} onChange={(event) => set('toParty', event.target.value)} /></Field></div>
     <Callout tone="warning">企业微信应用会校验企业可信 IP。公网 IP 变化时，这个渠道可能失败，请同时配置群机器人作为下一顺位。</Callout>
   </>;
   if (type === 'telegram') return <>
-    <Field label="Bot Token" hint={secretHint || '在 BotFather 创建机器人后获得'} required><Input type="password" value={String(config.botToken || '')} onChange={(event) => set('botToken', event.target.value)} placeholder={editing ? '已保存，输入新 Token 才会替换' : '123456:ABC...'} required={!editing} /></Field>
-    <Field label="Chat ID" hint="个人、群组或频道的数字 ID" required><Input value={String(config.chatId || '')} onChange={(event) => set('chatId', event.target.value)} /></Field>
-    <Field label="API 地址" hint="中国大陆网络可填写自建反向代理"><Input value={String(config.apiBase || '')} onChange={(event) => set('apiBase', event.target.value)} /></Field>
+    <Field label="Bot Token" hint={secretHint || '在官方 @BotFather 发送 /newbot 后获得'} required><Input type="password" value={String(config.botToken || '')} onChange={(event) => set('botToken', event.target.value)} placeholder={editing ? '已保存，输入新 Token 才会替换' : '123456789:AA...'} required={!editing} /></Field>
+    <Field label="Chat ID" hint="getUpdates 结果中的 message.chat.id；群组或频道通常带负号" required><Input value={String(config.chatId || '')} onChange={(event) => set('chatId', event.target.value)} placeholder="例如 -1001234567890" /></Field>
+    <Field label="API 地址" hint="通常保留默认值；仅填写 API 根地址，不要附加 /bot... 路径"><Input value={String(config.apiBase || '')} onChange={(event) => set('apiBase', event.target.value)} /></Field>
     <label className="check-row"><input type="checkbox" checked={Boolean(config.disableNotification)} onChange={(event) => set('disableNotification', event.target.checked)} /><span><strong>静默发送</strong><small>消息到达时不播放提示音</small></span></label>
   </>;
+  const setBarkKey = (value: string) => {
+    if (/^https?:\/\//i.test(value.trim())) {
+      try {
+        const url = new URL(value.trim());
+        const [deviceKey] = url.pathname.split('/').filter(Boolean);
+        if (deviceKey) {
+          setConfig({ ...config, serverUrl: url.origin, deviceKey });
+          return;
+        }
+      } catch {
+        // Keep the original input so server-side validation can show a useful error.
+      }
+    }
+    set('deviceKey', value);
+  };
   return <>
-    <Field label="Bark Key" hint={secretHint || '打开 iPhone 上的 Bark，复制推送地址末尾的 Key'} required><Input type="password" value={String(config.deviceKey || '')} onChange={(event) => set('deviceKey', event.target.value)} placeholder={editing ? '已保存，输入新 Key 才会替换' : ''} required={!editing} /></Field>
+    <Field label="Bark Key" hint={secretHint || '可只填设备 Key，也可直接粘贴 Bark 首页的完整测试地址'} required><Input type="password" value={String(config.deviceKey || '')} onChange={(event) => setBarkKey(event.target.value)} placeholder={editing ? '已保存，输入新 Key 或完整地址才会替换' : '设备 Key 或 https://api.day.app/设备Key/测试'} required={!editing} /></Field>
     <Field label="Bark 服务器" hint="使用官方服务可保留默认值；也支持自建 Bark Server"><Input value={String(config.serverUrl || '')} onChange={(event) => set('serverUrl', event.target.value)} /></Field>
-    <div className="form-grid form-grid--2"><Field label="通知分组"><Input value={String(config.group || '')} onChange={(event) => set('group', event.target.value)} /></Field><Field label="时效级别"><NativeSelect value={String(config.level || 'active')} onChange={(event) => set('level', event.target.value)}><option value="active">普通</option><option value="timeSensitive">时效通知</option><option value="passive">静默</option></NativeSelect></Field></div>
+    <div className="form-grid form-grid--2"><Field label="通知分组" hint="相同分组会在 Bark 中归类显示"><Input value={String(config.group || '')} onChange={(event) => set('group', event.target.value)} /></Field><Field label="通知铃声（可选）" hint="填写 Bark 铃声名，例如 minuet"><Input value={String(config.sound || '')} onChange={(event) => set('sound', event.target.value)} placeholder="默认铃声" /></Field></div>
+    <Field label="时效级别"><NativeSelect value={String(config.level || 'active')} onChange={(event) => set('level', event.target.value)}><option value="active">普通：立即亮屏并显示</option><option value="timeSensitive">时效通知：可穿过专注模式</option><option value="passive">静默：只进入通知中心</option></NativeSelect></Field>
     <Callout>Bark 是 iPhone 推送工具。EasyNotice 会把标题、正文、分组、链接和远程图片图标一起发送过去。</Callout>
   </>;
 }
@@ -110,6 +127,7 @@ export function ChannelsPage() {
     <DialogShell open={open} onOpenChange={setOpen} title={editing ? '编辑通知出口' : '添加通知出口'} description="密钥会在服务端加密保存，保存后不会在页面中明文显示。" size="lg" footer={<><Button variant="secondary" onClick={() => setOpen(false)}>取消</Button><Button type="submit" form="channel-form" disabled={saving}>{saving ? '正在保存…' : '保存出口'}<ArrowRight size={16} /></Button></>}>
       <form id="channel-form" className="dialog-form" onSubmit={save}>
         {!editing ? <div className="channel-type-picker">{types.map((value) => { const meta = channelMeta[value]; const Icon = meta.icon; return <button type="button" key={value} className={`channel-type-option ${type === value ? 'is-selected' : ''}`} onClick={() => chooseType(value)}><Icon size={23} weight="duotone" /><span><strong>{meta.short}</strong><small>{meta.description}</small></span>{type === value ? <Check size={18} weight="bold" /> : null}</button>; })}</div> : null}
+        <ChannelSetupGuide type={type} />
         <Field label="渠道名称" required><Input value={name} onChange={(event) => setName(event.target.value)} /></Field>
         <ChannelFields type={type} config={config} setConfig={setConfig} editing={Boolean(editing)} />
       </form>
