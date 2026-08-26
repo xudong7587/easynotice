@@ -25,6 +25,9 @@ export interface Channel {
   lastStatus: string;
   lastError?: string;
   lastSuccessAt?: number;
+  callbackUrl?: string;
+  lastCallbackAt?: number;
+  lastCallbackType?: string;
   createdAt: number;
   updatedAt: number;
   config: Record<string, unknown>;

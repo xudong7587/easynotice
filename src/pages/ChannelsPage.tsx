@@ -7,12 +7,12 @@ import type { Channel, ChannelType } from '../types';
 import { channelMeta } from '../components/channelMeta';
 import { ChannelSetupGuide } from '../components/ChannelSetupGuide';
 import { DialogShell } from '../components/DialogShell';
-import { Button, Callout, EmptyState, Field, Input, NativeSelect, PageHeader, Skeleton, StatusBadge } from '../components/ui';
+import { Button, Callout, CopyButton, EmptyState, Field, Input, NativeSelect, PageHeader, Skeleton, StatusBadge } from '../components/ui';
 
 const types = Object.keys(channelMeta) as ChannelType[];
 
 function blankConfig(type: ChannelType): Record<string, unknown> {
-  if (type === 'wecom_app') return { corpId: '', corpSecret: '', agentId: '', toUser: '@all', toParty: '' };
+  if (type === 'wecom_app') return { corpId: '', corpSecret: '', agentId: '', toUser: '@all', toParty: '', callbackEnabled: false, callbackToken: '', callbackEncodingAesKey: '' };
   if (type === 'wecom_robot') return { webhookUrl: '' };
   if (type === 'telegram') return { botToken: '', chatId: '', apiBase: 'https://api.telegram.org', disableNotification: false };
   return { serverUrl: 'https://api.day.app', deviceKey: '', group: 'EasyNotice', sound: '', level: 'active' };
@@ -20,14 +20,18 @@ function blankConfig(type: ChannelType): Record<string, unknown> {
 
 function editConfig(channel: Channel): Record<string, unknown> {
   const config = { ...blankConfig(channel.type), ...channel.config };
-  if (channel.type === 'wecom_app') config.corpSecret = '';
+  if (channel.type === 'wecom_app') {
+    config.corpSecret = '';
+    config.callbackToken = '';
+    config.callbackEncodingAesKey = '';
+  }
   if (channel.type === 'wecom_robot') config.webhookUrl = '';
   if (channel.type === 'telegram') config.botToken = '';
   if (channel.type === 'bark') config.deviceKey = '';
   return config;
 }
 
-function ChannelFields({ type, config, setConfig, editing }: { type: ChannelType; config: Record<string, unknown>; setConfig: (value: Record<string, unknown>) => void; editing: boolean }) {
+function ChannelFields({ type, config, setConfig, editing, channel }: { type: ChannelType; config: Record<string, unknown>; setConfig: (value: Record<string, unknown>) => void; editing: boolean; channel?: Channel }) {
   const set = (key: string, value: unknown) => setConfig({ ...config, [key]: value });
   const secretHint = editing ? '已保存，留空表示不修改' : undefined;
   if (type === 'wecom_robot') return <>
@@ -40,7 +44,15 @@ function ChannelFields({ type, config, setConfig, editing }: { type: ChannelType
     <Field label="应用 Secret" hint={secretHint || '自建应用详情页 → Secret → 查看'} required><Input type="password" value={String(config.corpSecret || '')} onChange={(event) => set('corpSecret', event.target.value)} placeholder={editing ? '已保存，输入新 Secret 才会替换' : '应用 Secret（不要填写通讯录 Secret）'} required={!editing} /></Field>
     <div className="form-grid form-grid--2"><Field label="接收成员" hint="默认 @all，也可填写成员账号并用 | 分隔"><Input value={String(config.toUser || '')} onChange={(event) => set('toUser', event.target.value)} /></Field><Field label="接收部门" hint="可选，多个部门用 | 分隔"><Input value={String(config.toParty || '')} onChange={(event) => set('toParty', event.target.value)} /></Field></div>
     <Callout tone="warning" title="企业可信 IP 在企微后台配置，不填在这里">路径是“应用管理 → 自建应用 → 开发者接口 → 企业可信 IP”。先保存并发送测试；若企微返回错误 60020，错误详情会直接显示需要加入的公网出口 IP。</Callout>
-    <Callout title="无需填写回调 URL、Token、EncodingAESKey">这些字段属于“接收消息服务器”，仅用于企业微信向 EasyNotice 推送成员消息或事件。当前出口只主动发送通知，不使用回调，也不需要可信域名或网页授权回调域。</Callout>
+    {!editing ? <Callout title="交互回调可选">先保存企微应用出口；再次进入编辑后，可以启用回调并取得专属 URL。只主动发送通知时无需启用。</Callout> : <>
+      <label className="check-row"><input type="checkbox" checked={Boolean(config.callbackEnabled)} onChange={(event) => set('callbackEnabled', event.target.checked)} /><span><strong>启用接收消息与事件回调（可选）</strong><small>完成签名校验和 AES 解密并留档；当前版本不会自动回复成员</small></span></label>
+      {config.callbackEnabled ? <>
+        <div className="copy-field"><div><small>回调 URL：复制到企微“接收消息 → 设置 API 接收”</small><code>{channel?.callbackUrl}</code></div><CopyButton value={channel?.callbackUrl || ''} /></div>
+        <div className="form-grid form-grid--2"><Field label="回调 Token" hint={config.hasCallbackToken ? '已保存，留空表示不修改' : '企微后台可随机生成；1-32 位英文或数字'} required={!config.hasCallbackToken}><Input type="password" value={String(config.callbackToken || '')} onChange={(event) => set('callbackToken', event.target.value)} placeholder={config.hasCallbackToken ? '已保存，输入新 Token 才会替换' : '与企微后台填写值完全一致'} required={!config.hasCallbackToken} /></Field><Field label="EncodingAESKey" hint={config.hasCallbackEncodingAesKey ? '已保存，留空表示不修改' : '企微后台点击随机获取；固定 43 位'} required={!config.hasCallbackEncodingAesKey}><Input type="password" value={String(config.callbackEncodingAesKey || '')} onChange={(event) => set('callbackEncodingAesKey', event.target.value)} placeholder={config.hasCallbackEncodingAesKey ? '已保存，输入新密钥才会替换' : '43 位英文或数字'} required={!config.hasCallbackEncodingAesKey} /></Field></div>
+        <Callout title="正确保存顺序">先在企微后台随机生成 Token 和 EncodingAESKey，并填入这里；先保存 EasyNotice，再把上面的 URL 和同一组密钥填回企微后台并保存验证。回调域名必须能被企业微信从公网访问，建议使用标准 HTTPS 443；若带 <code>:666</code> 校验失败，请用反向代理映射到 443。可对照<a href="https://developer.work.weixin.qq.com/document/path/90238" target="_blank" rel="noreferrer">企微接收消息官方说明</a>。</Callout>
+        {channel?.lastCallbackAt ? <Callout tone="success" title="最近收到企微回调">{formatDate(channel.lastCallbackAt)} · {channel.lastCallbackType || '未知类型'}</Callout> : <Callout tone="warning">尚未收到回调。EasyNotice 保存完成后，再到企业微信后台点击保存验证。</Callout>}
+      </> : <Callout>保持关闭时只主动发送消息，不需要 URL、Token 或 EncodingAESKey。</Callout>}
+    </>}
   </>;
   if (type === 'telegram') return <>
     <Field label="Bot Token" hint={secretHint || '在官方 @BotFather 发送 /newbot 后获得'} required><Input type="password" value={String(config.botToken || '')} onChange={(event) => set('botToken', event.target.value)} placeholder={editing ? '已保存，输入新 Token 才会替换' : '123456789:AA...'} required={!editing} /></Field>
@@ -135,7 +147,7 @@ export function ChannelsPage() {
         {!editing ? <div className="channel-type-picker">{types.map((value) => { const meta = channelMeta[value]; const Icon = meta.icon; return <button type="button" key={value} className={`channel-type-option ${type === value ? 'is-selected' : ''}`} onClick={() => chooseType(value)}><Icon size={23} weight="duotone" /><span><strong>{meta.short}</strong><small>{meta.description}</small></span>{type === value ? <Check size={18} weight="bold" /> : null}</button>; })}</div> : null}
         <ChannelSetupGuide type={type} />
         <Field label="渠道名称" required><Input value={name} onChange={(event) => setName(event.target.value)} /></Field>
-        <ChannelFields type={type} config={config} setConfig={setConfig} editing={Boolean(editing)} />
+        <ChannelFields type={type} config={config} setConfig={setConfig} editing={Boolean(editing)} channel={editing} />
       </form>
     </DialogShell>
   </div>;

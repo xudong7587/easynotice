@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import supertest from 'supertest';
 
@@ -11,6 +12,23 @@ process.env.NODE_ENV = 'test';
 
 let agent: ReturnType<typeof supertest.agent>;
 let database: { close: () => void };
+
+function encryptWeCom(message: string, encodingAesKey: string, receiveId: string): string {
+  const aesKey = Buffer.from(`${encodingAesKey}=`, 'base64');
+  const messageBytes = Buffer.from(message);
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(messageBytes.length);
+  const plain = Buffer.concat([Buffer.alloc(16, 7), length, messageBytes, Buffer.from(receiveId)]);
+  const paddingLength = 32 - (plain.length % 32 || 32) || 32;
+  const padded = Buffer.concat([plain, Buffer.alloc(paddingLength, paddingLength)]);
+  const cipher = crypto.createCipheriv('aes-256-cbc', aesKey, aesKey.subarray(0, 16));
+  cipher.setAutoPadding(false);
+  return Buffer.concat([cipher.update(padded), cipher.final()]).toString('base64');
+}
+
+function callbackSignature(token: string, timestamp: string, nonce: string, encrypted: string): string {
+  return crypto.createHash('sha1').update([token, timestamp, nonce, encrypted].sort().join('')).digest('hex');
+}
 
 beforeAll(async () => {
   const [{ createApp }, { db }] = await Promise.all([import('./app.js'), import('./db.js')]);
@@ -30,10 +48,12 @@ describe('webhook integration', () => {
       name: 'Lucky 测试', recipeId: 'lucky', routeMode: 'failover', channelIds: [], enabled: true,
     }).expect(201);
     const source = created.body.source as { endpoint: { hookUrl: string } };
+    expect((created.body.source as { endpoint: { url: string } }).endpoint.url).toBe(source.endpoint.hookUrl);
+    expect(source.endpoint.hookUrl).not.toContain('/api/v1/notify/');
     const hookPath = new URL(source.endpoint.hookUrl).pathname;
     const received = await agent.post(hookPath).send({
       title: '公网IP更新', content: '更新为 203.0.113.8', event: 'ip_changed',
-    }).expect(202);
+    }).expect(200);
     expect(received.body.success).toBe(true);
     expect(received.body.recognized.title).toBe('公网IP更新');
 
@@ -61,5 +81,53 @@ describe('webhook integration', () => {
 
     const channels = await agent.get('/api/channels').expect(200);
     expect(channels.body.channels).not.toContainEqual(expect.objectContaining({ id: channelId }));
+  });
+
+  it('验证、解密并留存可选的企业微信应用回调', async () => {
+    const corpId = 'wwcallbacktest';
+    const callbackToken = 'CallbackToken123';
+    const callbackEncodingAesKey = Buffer.from('0123456789abcdef0123456789abcdef')
+      .toString('base64').replace(/=$/, '');
+    const created = await agent.post('/api/channels').send({
+      name: '企微回调测试',
+      type: 'wecom_app',
+      config: {
+        corpId,
+        corpSecret: 'app-secret',
+        agentId: '1000002',
+        toUser: '@all',
+        callbackEnabled: true,
+        callbackToken,
+        callbackEncodingAesKey,
+      },
+      enabled: true,
+    }).expect(201);
+    const channelId = String(created.body.channel.id);
+    const callbackPath = new URL(String(created.body.channel.callbackUrl)).pathname;
+    const timestamp = '1770000000';
+    const nonce = 'nonce123';
+
+    const encryptedEcho = encryptWeCom('easy-notice-ok', callbackEncodingAesKey, corpId);
+    await agent.get(callbackPath).query({
+      msg_signature: callbackSignature(callbackToken, timestamp, nonce, encryptedEcho),
+      timestamp,
+      nonce,
+      echostr: encryptedEcho,
+    }).expect(200, 'easy-notice-ok');
+
+    const message = '<xml><ToUserName><![CDATA[wwcallbacktest]]></ToUserName><FromUserName><![CDATA[user-1]]></FromUserName><CreateTime>1770000000</CreateTime><MsgType><![CDATA[text]]></MsgType><Content><![CDATA[你好]]></Content><MsgId>123456</MsgId><AgentID>1000002</AgentID></xml>';
+    const encryptedMessage = encryptWeCom(message, callbackEncodingAesKey, corpId);
+    const envelope = `<xml><ToUserName><![CDATA[${corpId}]]></ToUserName><Encrypt><![CDATA[${encryptedMessage}]]></Encrypt><AgentID><![CDATA[1000002]]></AgentID></xml>`;
+    await agent.post(callbackPath).query({
+      msg_signature: callbackSignature(callbackToken, timestamp, nonce, encryptedMessage),
+      timestamp,
+      nonce,
+    }).set('Content-Type', 'application/xml').send(envelope).expect(200, '');
+
+    const events = await agent.get(`/api/channels/${channelId}/callback-events`).expect(200);
+    expect(events.body.events[0]).toMatchObject({
+      messageType: 'text',
+      fromUser: 'user-1',
+    });
   });
 });

@@ -22,7 +22,7 @@ export const recipes: Recipe[] = [
     confidence: 'verified',
     method: 'POST',
     contentType: 'application/json',
-    pathStyle: 'legacy',
+    pathStyle: 'hook',
     bodyTemplate: `{
   "title": "公网IP更新",
   "content": "在{time}更新为{ipAddr}",

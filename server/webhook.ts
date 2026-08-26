@@ -87,7 +87,7 @@ function receive(request: Request, response: Response): void {
   })();
 
   wakeWorker();
-  response.status(202).json({
+  response.status(200).json({
     success: true,
     message: 'EasyNotice 已收到，正在按路由发送',
     eventId,

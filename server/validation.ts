@@ -28,6 +28,13 @@ const schemas = {
     agentId: z.string().trim().regex(/^\d+$/, '应用 AgentId 应为数字'),
     toUser: z.string().trim().optional(),
     toParty: z.string().trim().optional(),
+    callbackEnabled: z.boolean().optional().default(false),
+    callbackToken: z.string().trim().regex(/^[A-Za-z0-9]{1,32}$/, '回调 Token 只能包含 1-32 位英文或数字').optional(),
+    callbackEncodingAesKey: z.string().trim().regex(/^[A-Za-z0-9]{43}$/, 'EncodingAESKey 必须是 43 位英文或数字').optional(),
+  }).superRefine((config, context) => {
+    if (!config.callbackEnabled) return;
+    if (!config.callbackToken) context.addIssue({ code: 'custom', path: ['callbackToken'], message: '启用回调后请填写 Token' });
+    if (!config.callbackEncodingAesKey) context.addIssue({ code: 'custom', path: ['callbackEncodingAesKey'], message: '启用回调后请填写 EncodingAESKey' });
   }),
   telegram: z.object({
     botToken: z.string().trim().min(10, 'Bot Token 不完整'),
@@ -52,7 +59,7 @@ export function parseChannelConfig(
   const candidate = { ...(existing as Record<string, unknown> | undefined), ...(value as Record<string, unknown>) };
   const secretFields: Record<ChannelType, string[]> = {
     wecom_robot: ['webhookUrl'],
-    wecom_app: ['corpSecret'],
+    wecom_app: ['corpSecret', 'callbackToken', 'callbackEncodingAesKey'],
     telegram: ['botToken'],
     bark: ['deviceKey'],
   };
@@ -66,7 +73,7 @@ export function maskChannelConfig(type: ChannelType, config: ChannelConfig): Rec
   const copy = { ...(config as unknown as Record<string, unknown>) };
   const secretFields: Record<ChannelType, string[]> = {
     wecom_robot: ['webhookUrl'],
-    wecom_app: ['corpSecret'],
+    wecom_app: ['corpSecret', 'callbackToken', 'callbackEncodingAesKey'],
     telegram: ['botToken'],
     bark: ['deviceKey'],
   };

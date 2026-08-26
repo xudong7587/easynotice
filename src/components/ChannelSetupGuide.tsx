@@ -56,8 +56,8 @@ const guides: Record<ChannelType, ChannelGuide> = {
     docsLabel: '企业微信群机器人文档',
   },
   wecom_app: {
-    title: '配置“主动发送”型企业微信自建应用',
-    intro: '只需 CorpID、AgentId、应用 Secret、可见范围和企业可信 IP；不需要接收消息回调。',
+    title: '配置企业微信自建应用',
+    intro: '主动发送只需 CorpID、AgentId、Secret、可见范围和企业可信 IP；接收消息回调可以稍后按需启用。',
     steps: [
       {
         title: '创建自建应用',
@@ -72,8 +72,8 @@ const guides: Record<ChannelType, ChannelGuide> = {
         detail: <>在“应用管理 → 该自建应用 → 开发者接口 → 企业可信 IP → 配置”中添加 EasyNotice 访问互联网时使用的公网出口 IP。这里填写的是公网 IP，不是 <code>192.168.x.x</code> 这类 NAS 局域网地址。</>,
       },
       {
-        title: '不要设置“接收消息”回调',
-        detail: <>EasyNotice 这个出口只调用企业微信接口主动发通知，不接收成员发给应用的消息。因此“接收消息 → 设置 API 接收”里的 URL、Token、EncodingAESKey 均无需填写，“网页授权及 JS-SDK”的回调域也无需为发送通知而配置。</>,
+        title: '按需启用交互回调',
+        detail: <>只发送通知时无需设置回调。以后需要接收成员消息或事件时，先保存出口，再次编辑并开启“接收消息与事件回调”；EasyNotice 会提供专属 URL，并校验 Token、EncodingAESKey、签名和加密内容。</>,
       },
       {
         title: '保存并发送测试',
@@ -85,8 +85,9 @@ const guides: Record<ChannelType, ChannelGuide> = {
       { name: '应用 AgentId', source: '应用管理 → 自建应用详情 → AgentId' },
       { name: '应用 Secret', source: '同一应用详情页 → Secret → 查看' },
       { name: '接收成员 / 部门', source: <>通讯录中的成员账号 / 部门 ID；不确定时先用 <code>@all</code></> },
+      { name: '回调 URL / Token / EncodingAESKey', source: '可选；保存出口后再次编辑，按页面顺序配置' },
     ],
-    note: <>“企业可信 IP”和“接收消息服务器”是两个独立设置。前者限制谁能调用企微 API，主动发送必须配置；后者让企微把消息或事件推给你的服务器，本出口不使用。若公网出口 IP 会变化，建议再配置群机器人作为下一顺位。</>,
+    note: <>“企业可信 IP”和“接收消息服务器”是两个独立设置。前者限制谁能调用企微 API，主动发送必须配置；后者让企微把消息或事件推给 EasyNotice，只有启用交互回调时才配置。若公网出口 IP 会变化，建议再配置群机器人作为下一顺位。</>,
     docsUrl: 'https://developer.work.weixin.qq.com/document/path/90236',
     docsLabel: '企业微信应用消息文档',
   },

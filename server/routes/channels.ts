@@ -6,6 +6,7 @@ import { decryptSecret, encryptSecret } from '../crypto.js';
 import { deliverToChannel } from '../channels.js';
 import { maskChannelConfig, parseChannelConfig } from '../validation.js';
 import type { ChannelConfig, ChannelType, NoticeForDelivery } from '../types.js';
+import { requestBaseUrl } from '../url.js';
 
 const router = Router();
 
@@ -22,8 +23,14 @@ interface ChannelRow {
   updated_at: number;
 }
 
-function serialize(row: ChannelRow) {
+function serialize(row: ChannelRow, baseUrl: string) {
   const config = decryptSecret<ChannelConfig>(row.config_encrypted);
+  const callback = row.type === 'wecom_app'
+    ? db.prepare(`
+      SELECT message_type, event_type, received_at
+      FROM wecom_callback_events WHERE channel_id = ? ORDER BY received_at DESC LIMIT 1
+    `).get(row.id) as { message_type: string; event_type: string; received_at: number } | undefined
+    : undefined;
   return {
     id: row.id,
     name: row.name,
@@ -34,13 +41,17 @@ function serialize(row: ChannelRow) {
     lastSuccessAt: row.last_success_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    callbackUrl: row.type === 'wecom_app' ? `${baseUrl}/callback/wecom/${row.id}` : undefined,
+    lastCallbackAt: callback?.received_at,
+    lastCallbackType: callback ? callback.event_type || callback.message_type || 'unknown' : undefined,
     config: maskChannelConfig(row.type, config),
   };
 }
 
-router.get('/', (_request, response) => {
+router.get('/', (request, response) => {
   const rows = db.prepare('SELECT * FROM channels ORDER BY enabled DESC, created_at ASC').all() as ChannelRow[];
-  response.json({ channels: rows.map(serialize) });
+  const baseUrl = requestBaseUrl(request);
+  response.json({ channels: rows.map((row) => serialize(row, baseUrl)) });
 });
 
 const channelSchema = z.object({
@@ -60,7 +71,7 @@ router.post('/', (request, response) => {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(id, input.name, input.type, encryptSecret(config), input.enabled ? 1 : 0, now, now);
   const row = db.prepare('SELECT * FROM channels WHERE id = ?').get(id) as ChannelRow;
-  response.status(201).json({ channel: serialize(row) });
+  response.status(201).json({ channel: serialize(row, requestBaseUrl(request)) });
 });
 
 router.put('/:id', (request, response) => {
@@ -84,7 +95,30 @@ router.put('/:id', (request, response) => {
     existing.id,
   );
   const row = db.prepare('SELECT * FROM channels WHERE id = ?').get(existing.id) as ChannelRow;
-  response.json({ channel: serialize(row) });
+  response.json({ channel: serialize(row, requestBaseUrl(request)) });
+});
+
+router.get('/:id/callback-events', (request, response) => {
+  const row = db.prepare('SELECT id, type FROM channels WHERE id = ?').get(request.params.id) as
+    | { id: string; type: ChannelType }
+    | undefined;
+  if (!row || row.type !== 'wecom_app') {
+    response.status(404).json({ error: '企业微信应用出口不存在' });
+    return;
+  }
+  const events = db.prepare(`
+    SELECT id, message_type, event_type, from_user, received_at
+    FROM wecom_callback_events WHERE channel_id = ? ORDER BY received_at DESC LIMIT 20
+  `).all(row.id) as Array<Record<string, unknown>>;
+  response.json({
+    events: events.map((event) => ({
+      id: event.id,
+      messageType: event.message_type,
+      eventType: event.event_type,
+      fromUser: event.from_user,
+      receivedAt: event.received_at,
+    })),
+  });
 });
 
 router.post('/:id/test', async (request, response, next) => {

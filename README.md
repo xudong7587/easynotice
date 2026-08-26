@@ -2,7 +2,7 @@
 
 EasyNotice 是一个面向 NAS 和家庭服务器的统一通知中心。它接收 Lucky、MDC-NG、Uptime Kuma、Watchtower 等应用发来的 Webhook，统一整理标题、正文、图片和链接，再按规则发送到企业微信、Telegram 或 Bark。
 
-当前稳定版本：[`v0.1.2`](https://github.com/xudong7587/easynotice/releases/tag/v0.1.2)
+当前稳定版本：[`v0.1.3`](https://github.com/xudong7587/easynotice/releases/tag/v0.1.3)
 
 普通用户只需要 Docker Compose，不需要安装 Node.js，也不需要下载源码后自行构建镜像。
 
@@ -12,6 +12,7 @@ EasyNotice 是一个面向 NAS 和家庭服务器的统一通知中心。它接�
 - 内置 Lucky、MDC-NG、Uptime Kuma、Watchtower / Shoutrrr 和通用 Webhook 预设
 - 自动识别 `title`、`subject`、`content`、`body`、`message`、`poster`、`thumb`、`url` 等常见字段
 - 发送到企业微信应用、企业微信群机器人、Telegram Bot 和 Bark
+- 企业微信应用可选接收成员消息和事件回调，自动验签、解密并留档
 - 支持“全部发送”和“主渠道失败后备用渠道补位”
 - 按通知内容匹配标题、正文、图片和链接规则
 - 保存每一次接收、匹配、重试和投递结果
@@ -156,7 +157,9 @@ EasyNotice 会自动选择企微机器人消息类型：普通通知发送纯文
 
 企业可信 IP 应填写 NAS 访问互联网时使用的公网出口 IP，不是 `192.168.x.x` 局域网地址。如果公网 IP 经常变化，推荐同时添加群机器人作为备用出口。
 
-EasyNotice 的企业微信应用出口只负责主动发送通知，不接收成员消息或事件。因此企业微信后台“接收消息 → 设置 API 接收”中的回调 URL、Token、EncodingAESKey 均不需要填写，网页授权回调域也不是发送通知的必要配置。保存出口并发送测试时，如果企业微信返回错误 `60020`，EasyNotice 会在错误详情中直接显示企微识别到的公网出口 IP；把这个 IP 加入“开发者接口 → 企业可信 IP”后再测试即可。
+EasyNotice 的企业微信应用出口默认只负责主动发送通知。因此在不启用交互回调时，企业微信后台“接收消息 → 设置 API 接收”中的回调 URL、Token、EncodingAESKey 均不需要填写，网页授权回调域也不是发送通知的必要配置。保存出口并发送测试时，如果企业微信返回错误 `60020`，EasyNotice 会在错误详情中直接显示企微识别到的公网出口 IP；把这个 IP 加入“开发者接口 → 企业可信 IP”后再测试即可。
+
+如需为后续交互做准备，可以在保存企微应用出口后重新编辑，按需启用“接收消息与事件回调”。EasyNotice 会生成专属回调 URL，完成企业微信 GET 验证、签名校验和 AES 解密，并留存最近收到的消息或事件；当前版本不会自动回复成员。Token 与 EncodingAESKey 必须和企微后台完全一致，配置时先保存 EasyNotice，再在企微后台保存验证。回调地址必须能从公网访问，建议使用标准 HTTPS 443。
 
 ### Telegram Bot
 
@@ -199,7 +202,7 @@ docker compose ps
 把 Compose 中的镜像标签从 `latest` 改为固定版本：
 
 ```yaml
-image: ghcr.io/xudong7587/easynotice:v0.1.2
+image: ghcr.io/xudong7587/easynotice:v0.1.3
 ```
 
 再执行：

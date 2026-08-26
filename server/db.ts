@@ -120,10 +120,23 @@ db.exec(`
     error TEXT
   );
 
+  CREATE TABLE IF NOT EXISTS wecom_callback_events (
+    id TEXT PRIMARY KEY,
+    channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    message_id TEXT,
+    message_type TEXT NOT NULL DEFAULT '',
+    event_type TEXT NOT NULL DEFAULT '',
+    from_user TEXT NOT NULL DEFAULT '',
+    raw_xml TEXT NOT NULL,
+    received_at INTEGER NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS idx_events_status_received ON events(status, received_at);
   CREATE INDEX IF NOT EXISTS idx_events_source_received ON events(source_id, received_at DESC);
   CREATE INDEX IF NOT EXISTS idx_deliveries_event ON deliveries(event_id);
   CREATE INDEX IF NOT EXISTS idx_rules_source_priority ON rules(source_id, priority);
+  CREATE INDEX IF NOT EXISTS idx_wecom_callback_channel_received ON wecom_callback_events(channel_id, received_at DESC);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_wecom_callback_message_id ON wecom_callback_events(channel_id, message_id) WHERE message_id IS NOT NULL;
 `);
 
 const now = Date.now();

@@ -9,6 +9,9 @@ export interface WeComAppConfig {
   agentId: string;
   toUser?: string;
   toParty?: string;
+  callbackEnabled?: boolean;
+  callbackToken?: string;
+  callbackEncodingAesKey?: string;
 }
 
 export interface WeComRobotConfig {

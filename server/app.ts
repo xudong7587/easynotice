@@ -7,6 +7,7 @@ import multer from 'multer';
 import { authRouter, requireAuth } from './auth.js';
 import { apiRouter } from './api.js';
 import { webhookRouter } from './webhook.js';
+import { weComCallbackRouter } from './wecom-callback.js';
 import { db } from './db.js';
 import { isProduction, maxJsonBody } from './config.js';
 
@@ -44,6 +45,7 @@ export function createApp() {
   });
 
   app.use(webhookRouter);
+  app.use(weComCallbackRouter);
   app.use('/api', authRouter);
   app.use('/api', requireAuth, apiRouter);
 
