@@ -114,7 +114,9 @@ jobs:
             exit 1
           fi
 
-          test "$(stat -c '%u' "$data_dir/uploads")" = "1000"
+          test "$(sudo stat -c '%u:%a' "$data_dir")" = "1000:700"
+          test "$(sudo stat -c '%u:%a' "$data_dir/uploads")" = "1000:700"
+          test "$(sudo stat -c '%u:%a' "$data_dir/.installation-secret")" = "1000:600"
           docker exec "$container" node -e \
             "fetch('http://127.0.0.1:18088/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
           docker exec "$container" sh -c \
