@@ -17,6 +17,11 @@ export interface DeliveryResult {
 
 const TIMEOUT_MS = 12_000;
 
+interface WeComApiResult {
+  errcode?: number;
+  errmsg?: string;
+}
+
 function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
@@ -55,6 +60,21 @@ function ensureHttpUrl(value: string, field: string): URL {
 function noticeText(notice: NoticeForDelivery): string {
   const source = `来源：${notice.sourceName}`;
   return `${notice.title}\n${notice.body}\n\n${source}`.trim();
+}
+
+function weComFailure(action: string, result: WeComApiResult, httpStatus: number): Error {
+  const detail = result.errmsg || String(httpStatus);
+  if (result.errcode === 60020) {
+    const sourceIp = detail.match(/from\s+ip\s*:\s*([^,\s]+)/i)?.[1];
+    const ipText = sourceIp ? ` ${sourceIp}` : '';
+    const targetText = sourceIp ? `公网出口 IP ${sourceIp}` : 'EasyNotice 的公网出口 IP';
+    return new Error(
+      `企业微信拒绝了当前公网出口 IP${ipText}（错误 60020）。`
+      + `请到“应用管理 → 自建应用 → 开发者接口 → 企业可信 IP”添加${targetText}，保存后重试。`
+      + '主动发送通知不需要配置“接收消息”的 URL、Token 或 EncodingAESKey。',
+    );
+  }
+  return new Error(`企业微信应用${action}失败：${detail}`);
 }
 
 function wecomMarkdown(notice: NoticeForDelivery): string {
@@ -122,9 +142,9 @@ async function getWeComToken(config: WeComAppConfig): Promise<string> {
   url.searchParams.set('corpid', config.corpId);
   url.searchParams.set('corpsecret', config.corpSecret);
   const { response, data } = await request(url.toString(), { method: 'GET' });
-  const result = data as { errcode?: number; errmsg?: string; access_token?: string };
+  const result = data as WeComApiResult & { access_token?: string };
   if (!response.ok || result.errcode !== 0 || !result.access_token) {
-    throw new Error(`企业微信应用鉴权失败：${result.errmsg || response.status}`);
+    throw weComFailure('鉴权', result, response.status);
   }
   return result.access_token;
 }
@@ -147,9 +167,9 @@ async function sendWeComAppMessage(
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  const result = data as { errcode?: number; errmsg?: string };
+  const result = data as WeComApiResult;
   if (!response.ok || result.errcode !== 0) {
-    throw new Error(`企业微信应用发送失败：${result.errmsg || response.status}`);
+    throw weComFailure('发送', result, response.status);
   }
   return { httpStatus: response.status, responseExcerpt: excerpt(data) };
 }
@@ -163,9 +183,9 @@ async function uploadWeComImage(token: string, assetPath: string, mimeType?: str
   url.searchParams.set('access_token', token);
   url.searchParams.set('type', 'image');
   const { response, data } = await request(url.toString(), { method: 'POST', body: form });
-  const result = data as { errcode?: number; errmsg?: string; media_id?: string };
+  const result = data as WeComApiResult & { media_id?: string };
   if (!response.ok || result.errcode !== 0 || !result.media_id) {
-    throw new Error(`企业微信图片上传失败：${result.errmsg || response.status}`);
+    throw weComFailure('图片上传', result, response.status);
   }
   return result.media_id;
 }

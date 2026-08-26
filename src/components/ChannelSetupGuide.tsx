@@ -52,28 +52,28 @@ const guides: Record<ChannelType, ChannelGuide> = {
     docsLabel: '企业微信群机器人文档',
   },
   wecom_app: {
-    title: '先在企业微信管理后台创建自建应用',
-    intro: '自建应用能把通知发给成员或部门，但需要 CorpID、AgentId、Secret 和企业可信 IP。',
+    title: '配置“主动发送”型企业微信自建应用',
+    intro: '只需 CorpID、AgentId、应用 Secret、可见范围和企业可信 IP；不需要接收消息回调。',
     steps: [
       {
         title: '创建自建应用',
         detail: <>登录企业微信管理后台，进入“应用管理 → 自建 → 创建应用”，并把需要接收通知的人加入应用的可见范围。</>,
       },
       {
-        title: '复制 AgentId 和 Secret',
-        detail: <>进入刚创建的应用详情页，复制数字形式的 AgentId；在 Secret 右侧点击“查看”，按企微提示取得 Secret。</>,
-      },
-      {
-        title: '复制企业 ID',
-        detail: <>进入“我的企业 → 企业信息”，在页面底部找到企业 ID（CorpID）。它通常以 <code>ww</code> 开头。</>,
+        title: '复制三项应用资料',
+        detail: <>在“我的企业 → 企业信息”复制通常以 <code>ww</code> 开头的企业 ID；再回到自建应用详情，复制数字形式的 AgentId，并在 Secret 右侧点击“查看”取得该应用的 Secret。</>,
       },
       {
         title: '设置企业可信 IP',
-        detail: <>回到应用详情，在“开发者接口 → 企业可信 IP”里添加 NAS 访问互联网时使用的公网出口 IP。不要填写 <code>192.168.x.x</code> 这类局域网地址。</>,
+        detail: <>在“应用管理 → 该自建应用 → 开发者接口 → 企业可信 IP → 配置”中添加 EasyNotice 访问互联网时使用的公网出口 IP。这里填写的是公网 IP，不是 <code>192.168.x.x</code> 这类 NAS 局域网地址。</>,
       },
       {
-        title: '确认接收范围并测试',
-        detail: <>“接收成员”可先保留 <code>@all</code>，它只会覆盖该应用可见范围。指定成员时填写成员账号而不是显示昵称，多个值用 <code>|</code> 分隔。</>,
+        title: '不要设置“接收消息”回调',
+        detail: <>EasyNotice 这个出口只调用企业微信接口主动发通知，不接收成员发给应用的消息。因此“接收消息 → 设置 API 接收”里的 URL、Token、EncodingAESKey 均无需填写，“网页授权及 JS-SDK”的回调域也无需为发送通知而配置。</>,
+      },
+      {
+        title: '保存并发送测试',
+        detail: <>“接收成员”可先保留 <code>@all</code>，它只覆盖应用可见范围。保存后点击“发送测试”；若提示错误 <code>60020</code>，EasyNotice 会直接显示企微识别到的 <code>from ip</code>，把该 IP 加入企业可信 IP 后重试。</>,
       },
     ],
     fields: [
@@ -82,7 +82,7 @@ const guides: Record<ChannelType, ChannelGuide> = {
       { name: '应用 Secret', source: '同一应用详情页 → Secret → 查看' },
       { name: '接收成员 / 部门', source: <>通讯录中的成员账号 / 部门 ID；不确定时先用 <code>@all</code></> },
     ],
-    note: <>最常见的失败是 Secret 所属应用不匹配、成员不在应用可见范围，或企业可信 IP 没填当前公网出口 IP。公网 IP 会变化时，建议再配置一个群机器人作为下一顺位。</>,
+    note: <>“企业可信 IP”和“接收消息服务器”是两个独立设置。前者限制谁能调用企微 API，主动发送必须配置；后者让企微把消息或事件推给你的服务器，本出口不使用。若公网出口 IP 会变化，建议再配置群机器人作为下一顺位。</>,
     docsUrl: 'https://developer.work.weixin.qq.com/document/path/90236',
     docsLabel: '企业微信应用消息文档',
   },

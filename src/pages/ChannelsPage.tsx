@@ -38,7 +38,8 @@ function ChannelFields({ type, config, setConfig, editing }: { type: ChannelType
     <div className="form-grid form-grid--2"><Field label="企业 ID (CorpID)" hint="我的企业 → 企业信息 → 企业 ID" required><Input value={String(config.corpId || '')} onChange={(event) => set('corpId', event.target.value)} placeholder="wwxxxxxxxxxxxxxxxx" /></Field><Field label="应用 AgentId" hint="自建应用详情页中的数字 ID" required><Input inputMode="numeric" value={String(config.agentId || '')} onChange={(event) => set('agentId', event.target.value)} placeholder="1000002" /></Field></div>
     <Field label="应用 Secret" hint={secretHint || '自建应用详情页 → Secret → 查看'} required><Input type="password" value={String(config.corpSecret || '')} onChange={(event) => set('corpSecret', event.target.value)} placeholder={editing ? '已保存，输入新 Secret 才会替换' : '应用 Secret（不要填写通讯录 Secret）'} required={!editing} /></Field>
     <div className="form-grid form-grid--2"><Field label="接收成员" hint="默认 @all，也可填写成员账号并用 | 分隔"><Input value={String(config.toUser || '')} onChange={(event) => set('toUser', event.target.value)} /></Field><Field label="接收部门" hint="可选，多个部门用 | 分隔"><Input value={String(config.toParty || '')} onChange={(event) => set('toParty', event.target.value)} /></Field></div>
-    <Callout tone="warning">企业微信应用会校验企业可信 IP。公网 IP 变化时，这个渠道可能失败，请同时配置群机器人作为下一顺位。</Callout>
+    <Callout tone="warning" title="企业可信 IP 在企微后台配置，不填在这里">路径是“应用管理 → 自建应用 → 开发者接口 → 企业可信 IP”。先保存并发送测试；若企微返回错误 60020，错误详情会直接显示需要加入的公网出口 IP。</Callout>
+    <Callout title="无需填写回调 URL、Token、EncodingAESKey">这些字段属于“接收消息服务器”，仅用于企业微信向 EasyNotice 推送成员消息或事件。当前出口只主动发送通知，不使用回调，也不需要可信域名或网页授权回调域。</Callout>
   </>;
   if (type === 'telegram') return <>
     <Field label="Bot Token" hint={secretHint || '在官方 @BotFather 发送 /newbot 后获得'} required><Input type="password" value={String(config.botToken || '')} onChange={(event) => set('botToken', event.target.value)} placeholder={editing ? '已保存，输入新 Token 才会替换' : '123456789:AA...'} required={!editing} /></Field>
