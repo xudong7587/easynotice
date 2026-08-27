@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   BellRinging,
   BookOpenText,
@@ -39,10 +39,10 @@ function VersionLink() {
   </a>;
 }
 
-function Navigation({ onNavigate }: { onNavigate?: () => void }) {
+function Navigation({ onNavigate, includeSettings = true }: { onNavigate?: () => void; includeSettings?: boolean }) {
   return (
     <nav className="navigation" aria-label="主导航">
-      {navigation.map((item) => {
+      {navigation.filter((item) => includeSettings || item.to !== '/settings').map((item) => {
         const Icon = item.icon;
         return (
           <NavLink
@@ -71,8 +71,6 @@ export function AppShell({ onLoggedOut }: { onLoggedOut: () => void }) {
   const [theme, setTheme] = useState<'light' | 'dark'>(readTheme);
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
-  const location = useLocation();
-  const currentLabel = useMemo(() => navigation.find((item) => item.to === location.pathname)?.label || 'EasyNotice', [location.pathname]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -87,30 +85,29 @@ export function AppShell({ onLoggedOut }: { onLoggedOut: () => void }) {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <span className="brand__mark"><BellRinging size={23} weight="fill" /></span>
-          <div><strong>EasyNotice</strong><small>NAS 通知中枢</small></div>
+      <header className="topbar">
+        <div className="topbar__inner">
+          <Link to="/" className="brand brand--header" aria-label="返回 EasyNotice 总览">
+            <span className="brand__mark"><BellRinging size={25} weight="fill" /></span>
+            <div><strong>EasyNotice</strong><small>NAS 通知中枢</small></div>
+          </Link>
+          <div className="topbar__actions">
+            <div className="service-state"><span />本地服务正常</div>
+            <VersionLink />
+            <IconButton label={theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+              {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
+            </IconButton>
+            <NavLink to="/settings" className={({ isActive }) => `topbar__settings ${isActive ? 'is-active' : ''}`}>
+              <GearSix size={20} /><span>设置</span>
+            </NavLink>
+            <IconButton className="topbar__logout" label="退出登录" onClick={logout}><SignOut size={19} /></IconButton>
+            <IconButton className="topbar__menu" label="打开导航" onClick={() => setMobileOpen(true)}><List size={22} /></IconButton>
+          </div>
         </div>
-        <Navigation />
-        <div className="sidebar__footer">
-          <div className="service-state"><span />本地服务正常</div>
-          <button type="button" className="navigation__item" onClick={logout}><SignOut size={20} />退出登录</button>
-          <VersionLink />
-        </div>
-      </aside>
+      </header>
 
       <div className="app-main">
-        <header className="topbar">
-          <div className="topbar__mobile">
-            <IconButton label="打开导航" onClick={() => setMobileOpen(true)}><List size={21} /></IconButton>
-            <strong>{currentLabel}</strong>
-          </div>
-          <div className="topbar__spacer" />
-          <IconButton label={theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-            {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
-          </IconButton>
-        </header>
+        <div className="nav-tray"><Navigation includeSettings={false} /></div>
         <main className="content"><Outlet /></main>
       </div>
 
@@ -120,12 +117,15 @@ export function AppShell({ onLoggedOut }: { onLoggedOut: () => void }) {
           <Dialog.Viewport className="mobile-nav-viewport">
             <Dialog.Popup className="mobile-nav">
               <div className="mobile-nav__header">
-                <div className="brand"><span className="brand__mark"><BellRinging size={23} weight="fill" /></span><strong>EasyNotice</strong></div>
+                <div className="brand"><span className="brand__mark"><BellRinging size={23} weight="fill" /></span><div><strong>EasyNotice</strong><small>NAS 通知中枢</small></div></div>
                 <Dialog.Close className="icon-button" aria-label="关闭导航"><X size={20} /></Dialog.Close>
               </div>
               <Navigation onNavigate={() => setMobileOpen(false)} />
-              <button type="button" className="navigation__item" onClick={logout}><SignOut size={20} />退出登录</button>
-              <VersionLink />
+              <div className="mobile-nav__footer">
+                <div className="service-state"><span />本地服务正常</div>
+                <button type="button" className="navigation__item" onClick={logout}><SignOut size={20} />退出登录</button>
+                <VersionLink />
+              </div>
             </Dialog.Popup>
           </Dialog.Viewport>
         </Dialog.Portal>
