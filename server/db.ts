@@ -53,6 +53,9 @@ db.exec(`
     token_encrypted TEXT NOT NULL,
     enabled INTEGER NOT NULL DEFAULT 1,
     route_mode TEXT NOT NULL DEFAULT 'failover' CHECK (route_mode IN ('failover', 'broadcast')),
+    default_image_url TEXT,
+    default_image_asset_id TEXT REFERENCES assets(id) ON DELETE SET NULL,
+    default_link_url TEXT,
     last_received_at INTEGER,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
@@ -122,6 +125,7 @@ db.exec(`
     event_type TEXT NOT NULL,
     severity TEXT NOT NULL,
     image_url TEXT,
+    image_asset_id TEXT REFERENCES assets(id) ON DELETE SET NULL,
     link_url TEXT,
     raw_json TEXT NOT NULL,
     matched_rule_id TEXT REFERENCES rules(id) ON DELETE SET NULL,
@@ -164,6 +168,16 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_ugreen_seen_source_time ON ugreen_seen_messages(source_id, seen_at DESC);
   CREATE UNIQUE INDEX IF NOT EXISTS idx_wecom_callback_message_id ON wecom_callback_events(channel_id, message_id) WHERE message_id IS NOT NULL;
 `);
+
+function ensureColumn(table: string, column: string, definition: string): void {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!columns.some((item) => item.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+
+ensureColumn('sources', 'default_image_url', 'TEXT');
+ensureColumn('sources', 'default_image_asset_id', 'TEXT REFERENCES assets(id) ON DELETE SET NULL');
+ensureColumn('sources', 'default_link_url', 'TEXT');
+ensureColumn('events', 'image_asset_id', 'TEXT REFERENCES assets(id) ON DELETE SET NULL');
 
 function protectDatabaseFiles(): void {
   for (const file of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {

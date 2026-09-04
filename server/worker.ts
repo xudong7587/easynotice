@@ -18,6 +18,7 @@ interface EventRow {
   event_type: string;
   severity: NoticeForDelivery['severity'];
   image_url: string | null;
+  image_asset_id: string | null;
   link_url: string | null;
   raw_json: string;
   matched_rule_id: string | null;
@@ -71,12 +72,9 @@ function loadRoutes(sourceId: string): RouteRow[] {
 }
 
 function loadAsset(event: EventRow): AssetRow | undefined {
-  if (!event.matched_rule_id) return undefined;
-  return db.prepare(`
-    SELECT a.id, a.stored_name, a.mime_type
-    FROM rules r JOIN assets a ON a.id = r.image_asset_id
-    WHERE r.id = ?
-  `).get(event.matched_rule_id) as AssetRow | undefined;
+  if (!event.image_asset_id) return undefined;
+  return db.prepare('SELECT id, stored_name, mime_type FROM assets WHERE id = ?')
+    .get(event.image_asset_id) as AssetRow | undefined;
 }
 
 function buildNotice(event: EventRow, sourceName: string): NoticeForDelivery {

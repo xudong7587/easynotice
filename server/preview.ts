@@ -12,6 +12,9 @@ interface PreviewSourceRow {
   id: string;
   name: string;
   recipe_id: string;
+  default_image_url: string | null;
+  default_image_asset_id: string | null;
+  default_link_url: string | null;
 }
 
 interface PreviewAssetRow {
@@ -34,15 +37,15 @@ export function builtInPreviewImageUrl(baseUrl = getSetting('base_url')): string
   return `${normalized}/notification-preview.png`;
 }
 
-function loadPreviewAsset(rule?: RuleRow): PreviewAssetRow | undefined {
-  if (!rule?.image_asset_id) return undefined;
+function loadPreviewAsset(assetId?: string): PreviewAssetRow | undefined {
+  if (!assetId) return undefined;
   return db.prepare('SELECT id, stored_name, mime_type FROM assets WHERE id = ?')
-    .get(rule.image_asset_id) as PreviewAssetRow | undefined;
+    .get(assetId) as PreviewAssetRow | undefined;
 }
 
 export function buildChannelPreview(sourceId: string | undefined, baseUrl: string): NoticeForDelivery | undefined {
   const source = sourceId
-    ? db.prepare('SELECT id, name, recipe_id FROM sources WHERE id = ?').get(sourceId) as PreviewSourceRow | undefined
+    ? db.prepare('SELECT id, name, recipe_id, default_image_url, default_image_asset_id, default_link_url FROM sources WHERE id = ?').get(sourceId) as PreviewSourceRow | undefined
     : undefined;
   if (sourceId && !source) return undefined;
 
@@ -52,8 +55,12 @@ export function buildChannelPreview(sourceId: string | undefined, baseUrl: strin
     ? db.prepare('SELECT * FROM rules WHERE source_id = ? AND enabled = 1 ORDER BY priority ASC, created_at ASC')
       .all(source.id) as RuleRow[]
     : [];
-  const applied = applyFirstRule(sample, rules);
-  const asset = loadPreviewAsset(applied.matchedRule);
+  const applied = applyFirstRule(sample, rules, {
+    imageUrl: source?.default_image_url || undefined,
+    imageAssetId: source?.default_image_asset_id || undefined,
+    linkUrl: source?.default_link_url || undefined,
+  });
+  const asset = loadPreviewAsset(applied.imageAssetId);
   const assetPath = asset ? path.resolve(uploadDir, asset.stored_name) : undefined;
   const validAssetPath = assetPath && fs.existsSync(assetPath) ? assetPath : undefined;
   const needsFallbackImage = !validAssetPath && !applied.notice.imageUrl;

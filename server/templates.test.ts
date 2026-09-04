@@ -38,6 +38,23 @@ describe('notification rules', () => {
     expect(result.notice.imageUrl).toBe('https://example.com/failed.png');
   });
 
+  it('uses source defaults when no keyword rule matches', () => {
+    const result = applyFirstRule(notice, [rule({ match_value: 'success' })], {
+      imageAssetId: 'default-asset',
+      linkUrl: 'https://notice.example/status',
+    });
+    expect(result.matchedRule).toBeUndefined();
+    expect(result.imageAssetId).toBe('default-asset');
+    expect(result.notice.linkUrl).toBe('https://notice.example/status');
+  });
+
+  it('keeps a keyword image ahead of the source default image', () => {
+    const result = applyFirstRule(notice, [rule({ image_url: null, image_asset_id: 'failed-asset' })], {
+      imageAssetId: 'default-asset',
+    });
+    expect(result.imageAssetId).toBe('failed-asset');
+  });
+
   it('ignores invalid regular expressions', () => {
     expect(ruleMatches(rule({ match_operator: 'regex', match_value: '[' }), notice)).toBe(false);
   });

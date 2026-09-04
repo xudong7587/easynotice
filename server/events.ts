@@ -16,7 +16,13 @@ export function storeNotice(input: EnqueueNoticeInput): string {
   const rules = db.prepare(`
     SELECT * FROM rules WHERE source_id = ? AND enabled = 1 ORDER BY priority ASC, created_at ASC
   `).all(input.sourceId) as RuleRow[];
-  const applied = applyFirstRule(input.notice, rules);
+  const source = db.prepare('SELECT default_image_url, default_image_asset_id, default_link_url FROM sources WHERE id = ?')
+    .get(input.sourceId) as { default_image_url: string | null; default_image_asset_id: string | null; default_link_url: string | null } | undefined;
+  const applied = applyFirstRule(input.notice, rules, {
+    imageUrl: source?.default_image_url || undefined,
+    imageAssetId: source?.default_image_asset_id || undefined,
+    linkUrl: source?.default_link_url || undefined,
+  });
   const eventId = nanoid();
   const receivedAt = input.receivedAt || Date.now();
   const updatedAt = Date.now();
@@ -25,8 +31,8 @@ export function storeNotice(input: EnqueueNoticeInput): string {
     db.prepare(`
       INSERT INTO events (
         id, source_id, request_id, status, title, body, event_type, severity,
-        image_url, link_url, raw_json, matched_rule_id, received_at
-      ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        image_url, image_asset_id, link_url, raw_json, matched_rule_id, received_at
+      ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       eventId,
       input.sourceId,
@@ -36,6 +42,7 @@ export function storeNotice(input: EnqueueNoticeInput): string {
       applied.notice.eventType,
       applied.notice.severity,
       applied.notice.imageUrl || null,
+      applied.imageAssetId || null,
       applied.notice.linkUrl || null,
       encryptStoredData(applied.notice.raw),
       applied.matchedRule?.id || null,

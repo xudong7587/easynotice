@@ -16,6 +16,9 @@ interface SourceRow {
   slug: string;
   token_hash: string;
   enabled: number;
+  default_image_url: string | null;
+  default_image_asset_id: string | null;
+  default_link_url: string | null;
 }
 
 function bearerToken(request: Request): string | undefined {
@@ -27,13 +30,13 @@ function bearerToken(request: Request): string | undefined {
 function resolveSource(request: Request): SourceRow | undefined {
   const directToken = Array.isArray(request.params.token) ? request.params.token[0] : request.params.token;
   if (directToken) {
-    return db.prepare('SELECT id, name, slug, token_hash, enabled FROM sources WHERE token_hash = ?')
+    return db.prepare('SELECT id, name, slug, token_hash, enabled, default_image_url, default_image_asset_id, default_link_url FROM sources WHERE token_hash = ?')
       .get(hashToken(directToken)) as SourceRow | undefined;
   }
 
   const slug = Array.isArray(request.params.slug) ? request.params.slug[0] : request.params.slug;
   if (!slug) return undefined;
-  const source = db.prepare('SELECT id, name, slug, token_hash, enabled FROM sources WHERE slug = ?')
+  const source = db.prepare('SELECT id, name, slug, token_hash, enabled, default_image_url, default_image_asset_id, default_link_url FROM sources WHERE slug = ?')
     .get(slug) as SourceRow | undefined;
   if (!source) return undefined;
 
@@ -58,7 +61,11 @@ function receive(request: Request, response: Response): void {
   const rules = db.prepare(`
     SELECT * FROM rules WHERE source_id = ? AND enabled = 1 ORDER BY priority ASC, created_at ASC
   `).all(source.id) as RuleRow[];
-  const applied = applyFirstRule(normalized, rules);
+  const applied = applyFirstRule(normalized, rules, {
+    imageUrl: source.default_image_url || undefined,
+    imageAssetId: source.default_image_asset_id || undefined,
+    linkUrl: source.default_link_url || undefined,
+  });
   const eventId = nanoid();
   const requestId = request.header('x-request-id')?.slice(0, 120) || nanoid(12);
   const now = Date.now();
@@ -67,8 +74,8 @@ function receive(request: Request, response: Response): void {
     db.prepare(`
       INSERT INTO events (
         id, source_id, request_id, status, title, body, event_type, severity,
-        image_url, link_url, raw_json, matched_rule_id, received_at
-      ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        image_url, image_asset_id, link_url, raw_json, matched_rule_id, received_at
+      ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       eventId,
       source.id,
@@ -78,6 +85,7 @@ function receive(request: Request, response: Response): void {
       applied.notice.eventType,
       applied.notice.severity,
       applied.notice.imageUrl || null,
+      applied.imageAssetId || null,
       applied.notice.linkUrl || null,
       encryptStoredData(applied.notice.raw),
       applied.matchedRule?.id || null,

@@ -159,6 +159,29 @@ describe('webhook integration', () => {
     expect(fs.existsSync(preview!.imageAssetPath!)).toBe(true);
   });
 
+  it('真实通知使用入口默认图片和自定义跳转链接', async () => {
+    const uploaded = await agent.post('/api/assets')
+      .attach('image', Buffer.from('source-default-image'), { filename: 'default.png', contentType: 'image/png' })
+      .expect(201);
+    const created = await agent.post('/api/sources').send({
+      name: '默认图片入口', recipeId: 'generic', routeMode: 'failover', channelIds: [], enabled: true,
+      defaultImageAssetId: uploaded.body.asset.id,
+      defaultLinkUrl: 'https://notice.example/nas',
+    }).expect(201);
+    const hookPath = new URL(String(created.body.source.endpoint.hookUrl)).pathname;
+    const received = await agent.post(hookPath).send({ title: '没有图片的真实通知', content: '正文' }).expect(200);
+    const stored = database.prepare('SELECT image_asset_id, link_url FROM events WHERE id = ?').get(received.body.eventId) as { image_asset_id: string; link_url: string };
+
+    expect(stored.image_asset_id).toBe(uploaded.body.asset.id);
+    expect(stored.link_url).toBe('https://notice.example/nas');
+    const detail = await agent.get(`/api/sources/${created.body.source.id}`).expect(200);
+    expect(detail.body.source).toMatchObject({
+      defaultImageAssetId: uploaded.body.asset.id,
+      defaultImageAssetUrl: `/api/assets/${uploaded.body.asset.id}`,
+      defaultLinkUrl: 'https://notice.example/nas',
+    });
+  });
+
   it('永久删除前要求先停用通知入口', async () => {
     const created = await agent.post('/api/sources').send({
       name: '待删除入口', recipeId: 'generic', routeMode: 'failover', channelIds: [], enabled: true,

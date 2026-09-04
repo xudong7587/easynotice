@@ -69,3 +69,9 @@ export interface RuleRow {
   image_asset_id: string | null;
   link_template: string | null;
 }
+
+export interface NoticeDefaults {
+  imageUrl?: string;
+  imageAssetId?: string;
+  linkUrl?: string;
+}

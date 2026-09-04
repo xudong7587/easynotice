@@ -1,5 +1,5 @@
 import { getByPath } from './normalize.js';
-import type { NormalizedNotice, RuleRow } from './types.js';
+import type { NormalizedNotice, NoticeDefaults, RuleRow } from './types.js';
 
 export function renderTemplate(template: string, context: Record<string, unknown>): string {
   return template.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_match, path: string) => {
@@ -38,13 +38,20 @@ export function ruleMatches(rule: RuleRow, notice: NormalizedNotice): boolean {
   return false;
 }
 
-export function applyFirstRule(notice: NormalizedNotice, rules: RuleRow[]): {
+export function applyFirstRule(notice: NormalizedNotice, rules: RuleRow[], defaults: NoticeDefaults = {}): {
   notice: NormalizedNotice;
   matchedRule?: RuleRow;
   imageAssetId?: string;
 } {
   const matchedRule = rules.find((rule) => ruleMatches(rule, notice));
-  if (!matchedRule) return { notice };
+  if (!matchedRule) return {
+    notice: {
+      ...notice,
+      imageUrl: notice.imageUrl || defaults.imageUrl,
+      linkUrl: defaults.linkUrl || notice.linkUrl,
+    },
+    imageAssetId: notice.imageUrl ? undefined : defaults.imageAssetId,
+  };
 
   const context: Record<string, unknown> = {
     ...notice.raw,
@@ -64,12 +71,12 @@ export function applyFirstRule(notice: NormalizedNotice, rules: RuleRow[]): {
       body: matchedRule.body_template
         ? renderTemplate(matchedRule.body_template, context).trim() || notice.body
         : notice.body,
-      imageUrl: matchedRule.image_url || notice.imageUrl,
+      imageUrl: matchedRule.image_url || notice.imageUrl || defaults.imageUrl,
       linkUrl: matchedRule.link_template
-        ? renderTemplate(matchedRule.link_template, context).trim() || notice.linkUrl
-        : notice.linkUrl,
+        ? renderTemplate(matchedRule.link_template, context).trim() || defaults.linkUrl || notice.linkUrl
+        : defaults.linkUrl || notice.linkUrl,
     },
     matchedRule,
-    imageAssetId: matchedRule.image_asset_id || undefined,
+    imageAssetId: matchedRule.image_asset_id || (matchedRule.image_url || notice.imageUrl ? undefined : defaults.imageAssetId),
   };
 }

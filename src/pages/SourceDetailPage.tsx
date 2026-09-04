@@ -7,6 +7,7 @@ import {
   ChatText,
   Check,
   FloppyDisk,
+  DotsSixVertical,
   ImageSquare,
   MagicWand,
   PencilSimple,
@@ -59,6 +60,11 @@ export function SourceDetailPage() {
   const [ruleDraft, setRuleDraft] = useState<RuleDraft>(emptyRule(0));
   const [savingRule, setSavingRule] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [defaultImageUrl, setDefaultImageUrl] = useState('');
+  const [defaultImageAssetId, setDefaultImageAssetId] = useState('');
+  const [defaultLinkUrl, setDefaultLinkUrl] = useState('');
+  const [savingDefaults, setSavingDefaults] = useState(false);
+  const [draggingChannelId, setDraggingChannelId] = useState<string>();
 
   const load = async () => {
     try {
@@ -70,6 +76,7 @@ export function SourceDetailPage() {
         api<{ assets: Asset[] }>('/api/assets'),
       ]);
       setSource(sourceResult.source); setRouteIds(sourceResult.source.channelIds); setRouteMode(sourceResult.source.routeMode);
+      setDefaultImageUrl(sourceResult.source.defaultImageUrl); setDefaultImageAssetId(sourceResult.source.defaultImageAssetId); setDefaultLinkUrl(sourceResult.source.defaultLinkUrl);
       setChannels(channelResult.channels.filter((channel) => channel.enabled)); setRecipes(recipeResult.recipes); setRules(ruleResult.rules); setAssets(assetResult.assets);
     } catch (error) { toast.error(error instanceof Error ? error.message : '加载入口失败'); }
   };
@@ -77,6 +84,12 @@ export function SourceDetailPage() {
 
   if (!source) return <div><PageHeader title="通知入口" /><Skeleton lines={8} /></div>;
   const recipe = recipes.find((item) => item.id === source.recipeId);
+  const orderedChannels = [...channels].sort((left, right) => {
+    const leftIndex = routeIds.indexOf(left.id); const rightIndex = routeIds.indexOf(right.id);
+    if (leftIndex >= 0 && rightIndex >= 0) return leftIndex - rightIndex;
+    if (leftIndex >= 0) return -1; if (rightIndex >= 0) return 1;
+    return channels.indexOf(left) - channels.indexOf(right);
+  });
 
   const move = (channelId: string, direction: -1 | 1) => {
     setRouteIds((current) => {
@@ -86,6 +99,14 @@ export function SourceDetailPage() {
     });
   };
   const toggle = (channelId: string) => setRouteIds((current) => current.includes(channelId) ? current.filter((item) => item !== channelId) : [...current, channelId]);
+  const dragOver = (targetId: string) => {
+    if (!draggingChannelId || draggingChannelId === targetId) return;
+    setRouteIds((current) => {
+      const from = current.indexOf(draggingChannelId); const to = current.indexOf(targetId);
+      if (from < 0 || to < 0) return current;
+      const copy = [...current]; copy.splice(to, 0, copy.splice(from, 1)[0]); return copy;
+    });
+  };
   const saveRoute = async () => {
     setSavingRoute(true);
     try { const result = await api<{ source: Source }>(`/api/sources/${id}`, { method: 'PUT', body: JSON.stringify({ routeMode, channelIds: routeIds }) }); setSource(result.source); toast.success('出口设置已保存'); }
@@ -134,6 +155,20 @@ export function SourceDetailPage() {
     catch (error) { toast.error(error instanceof Error ? error.message : '上传失败'); }
     finally { setUploading(false); }
   };
+  const uploadDefault = async (file?: File) => {
+    if (!file) return; setUploading(true);
+    try { const body = new FormData(); body.set('image', file); const result = await api<{ asset: Asset }>('/api/assets', { method: 'POST', body }); setAssets((current) => [result.asset, ...current]); setDefaultImageAssetId(result.asset.id); setDefaultImageUrl(''); toast.success('默认图片已上传'); }
+    catch (error) { toast.error(error instanceof Error ? error.message : '上传失败'); }
+    finally { setUploading(false); }
+  };
+  const saveDefaults = async () => {
+    setSavingDefaults(true);
+    try {
+      const result = await api<{ source: Source }>(`/api/sources/${id}`, { method: 'PUT', body: JSON.stringify({ defaultImageUrl, defaultImageAssetId, defaultLinkUrl }) });
+      setSource(result.source); toast.success('图片和跳转链接已保存');
+    } catch (error) { toast.error(error instanceof Error ? error.message : '保存失败'); }
+    finally { setSavingDefaults(false); }
+  };
 
   return <div>
     <Link to="/sources" className="back-link"><ArrowLeft size={16} />返回通知入口</Link>
@@ -149,7 +184,19 @@ export function SourceDetailPage() {
         </section>}
 
         <section className="panel section-block">
-          <div className="panel__header"><div><h2>不同通知使用不同图片</h2><p>按标题、正文或事件类型匹配。第一条命中的规则生效。</p></div><Button size="sm" onClick={openNewRule}><Plus size={16} />添加样式规则</Button></div>
+          <div className="panel__header"><div><h2>图片设置</h2><p>先设置默认图片；需要区分通知时，再用关键词规则覆盖它。</p></div><Button size="sm" onClick={openNewRule}><Plus size={16} />添加关键词图片</Button></div>
+          <div className="default-presentation">
+            <div className="default-presentation__preview">{defaultImageAssetId || defaultImageUrl ? <img src={defaultImageAssetId ? `/api/assets/${defaultImageAssetId}` : defaultImageUrl} alt="默认通知图片" /> : <ImageSquare size={28} />}</div>
+            <div className="default-presentation__fields">
+              <div><strong>默认图片</strong><p>通知没有自带图片、也没有命中关键词图片时使用。</p></div>
+              <div className="default-presentation__actions"><label className="button button--secondary button--sm"><input hidden type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void uploadDefault(event.target.files?.[0])} /><ImageSquare size={16} />{uploading ? '正在上传…' : '上传图片'}</label>{defaultImageAssetId || defaultImageUrl ? <Button variant="quiet" size="sm" onClick={() => { setDefaultImageAssetId(''); setDefaultImageUrl(''); }}>清除</Button> : null}</div>
+              {assets.length ? <div className="image-choice image-choice--compact" aria-label="选择默认图片">{assets.map((asset) => <button type="button" key={asset.id} className={`asset-choice ${defaultImageAssetId === asset.id ? 'is-selected' : ''}`} onClick={() => { setDefaultImageAssetId(asset.id); setDefaultImageUrl(''); }}><img src={asset.url} alt={asset.name} />{defaultImageAssetId === asset.id ? <span><Check size={15} weight="bold" /></span> : null}<small>{formatBytes(asset.size)}</small></button>)}</div> : null}
+              <Field label="或者使用公网图片地址"><Input value={defaultImageUrl} onChange={(event) => { setDefaultImageUrl(event.target.value); if (event.target.value) setDefaultImageAssetId(''); }} placeholder="https://example.com/default.jpg" /></Field>
+              <Field label="图文点击跳转链接" hint="留空时沿用通知自带链接；填写后默认跳转到这里"><Input value={defaultLinkUrl} onChange={(event) => setDefaultLinkUrl(event.target.value)} placeholder="https://你的外网地址" /></Field>
+              <Button onClick={() => void saveDefaults()} disabled={savingDefaults}><FloppyDisk size={16} />{savingDefaults ? '正在保存…' : '保存图片设置'}</Button>
+            </div>
+          </div>
+          <div className="subsection-heading"><div><strong>关键词图片</strong><p>按标题、正文或事件类型匹配，第一条命中的规则生效。</p></div></div>
           {rules.length ? <div className="rule-list">{rules.map((rule) => <div className="rule-row" key={rule.id}>
             <div className="rule-row__image">{rule.assetUrl || rule.imageUrl ? <img src={rule.assetUrl || rule.imageUrl} alt={`${rule.name} 的通知图片`} /> : <MagicWand size={22} />}</div>
             <div className="rule-row__content"><div><strong>{rule.name}</strong><StatusBadge status={rule.enabled ? 'success' : 'archived'} label={rule.enabled ? '启用' : '停用'} /></div><p>{rule.matchField === 'always' ? '匹配所有通知' : `${rule.matchField} ${rule.matchOperator} “${rule.matchValue}”`}</p>{rule.titleTemplate || rule.bodyTemplate ? <small>已自定义标题或正文模板</small> : null}</div>
@@ -162,9 +209,10 @@ export function SourceDetailPage() {
         <section className="panel route-editor">
           <div className="panel__header"><div><h2>出口设置</h2><p>勾选通知要发往的出口</p></div></div>
           <div className="segmented"><button type="button" className={routeMode === 'failover' ? 'is-active' : ''} onClick={() => setRouteMode('failover')}>失败后按顺序补位</button><button type="button" className={routeMode === 'broadcast' ? 'is-active' : ''} onClick={() => setRouteMode('broadcast')}>每个出口都发送</button></div>
-          <div className="route-editor__list">{channels.map((channel) => { const selected = routeIds.includes(channel.id); const index = routeIds.indexOf(channel.id); const meta = channelMeta[channel.type]; const Icon = meta.icon; const PreviewIcon = channel.type === 'wecom_robot' ? ChatText : ImageSquare; const previewKind = channel.type === 'wecom_robot' ? '文字预览' : '图文预览'; return <div className={`route-editor__row ${selected ? 'is-selected' : ''}`} key={channel.id}>
+          {routeMode === 'failover' && routeIds.length > 1 ? <p className="route-editor__hint"><DotsSixVertical size={16} />拖动横线调整顺序，也可以使用右侧箭头。调整后记得保存。</p> : null}
+          <div className="route-editor__list">{orderedChannels.map((channel) => { const selected = routeIds.includes(channel.id); const index = routeIds.indexOf(channel.id); const meta = channelMeta[channel.type]; const Icon = meta.icon; const PreviewIcon = channel.type === 'wecom_robot' ? ChatText : ImageSquare; const previewKind = channel.type === 'wecom_robot' ? '文字预览' : '图文预览'; return <div className={`route-editor__row ${selected ? 'is-selected' : ''} ${draggingChannelId === channel.id ? 'is-dragging' : ''}`} key={channel.id} onDragOver={(event) => { if (selected) { event.preventDefault(); dragOver(channel.id); } }} onDrop={() => setDraggingChannelId(undefined)}>
             <label><input type="checkbox" checked={selected} onChange={() => toggle(channel.id)} /><span className="channel-logo"><Icon size={18} /></span><span><strong>{channel.name}</strong><small>{selected && routeMode === 'failover' ? `顺位 ${index + 1}` : meta.short}</small></span></label>
-            <div className="route-editor__actions"><button type="button" className="route-editor__test" onClick={() => void testChannel(channel)} disabled={testingChannelId === channel.id} aria-label={`通过 ${channel.name} 发送${previewKind}`}><PreviewIcon size={14} /><span>{testingChannelId === channel.id ? '发送中' : '预览'}</span></button>{selected && routeMode === 'failover' ? <div className="route-editor__moves"><button type="button" onClick={() => move(channel.id, -1)} disabled={index === 0} aria-label="上移"><ArrowUp size={15} /></button><button type="button" onClick={() => move(channel.id, 1)} disabled={index === routeIds.length - 1} aria-label="下移"><ArrowDown size={15} /></button></div> : null}</div>
+            <div className="route-editor__actions"><button type="button" className="route-editor__test" onClick={() => void testChannel(channel)} disabled={testingChannelId === channel.id} aria-label={`通过 ${channel.name} 发送${previewKind}`}><PreviewIcon size={14} /><span>{testingChannelId === channel.id ? '发送中' : '预览'}</span></button>{selected && routeMode === 'failover' ? <><button type="button" className="route-editor__drag" draggable onDragStart={() => setDraggingChannelId(channel.id)} onDragEnd={() => setDraggingChannelId(undefined)} aria-label={`拖动 ${channel.name} 调整顺序`}><DotsSixVertical size={18} /></button><div className="route-editor__moves"><button type="button" onClick={() => move(channel.id, -1)} disabled={index === 0} aria-label="上移"><ArrowUp size={15} /></button><button type="button" onClick={() => move(channel.id, 1)} disabled={index === routeIds.length - 1} aria-label="下移"><ArrowDown size={15} /></button></div></> : null}</div>
           </div>; })}</div>
           {routeMode === 'failover' && routeIds.length > 1 ? <Callout title="当前发送顺序">先尝试 {routeIds.map((channelId) => channels.find((channel) => channel.id === channelId)?.name).filter(Boolean).join('；失败后再尝试 ')}</Callout> : null}
           <Button onClick={saveRoute} disabled={savingRoute}><FloppyDisk size={16} />{savingRoute ? '正在保存…' : '保存出口设置'}</Button>

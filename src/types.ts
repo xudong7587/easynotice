@@ -66,6 +66,10 @@ export interface Source {
   createdAt: number;
   updatedAt: number;
   channelIds: string[];
+  defaultImageUrl: string;
+  defaultImageAssetId: string;
+  defaultImageAssetUrl: string;
+  defaultLinkUrl: string;
   endpoint: SourceEndpoint;
   collector?: UgreenCollector;
 }

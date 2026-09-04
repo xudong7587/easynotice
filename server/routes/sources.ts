@@ -29,6 +29,9 @@ interface SourceRow {
   token_encrypted: string;
   enabled: number;
   route_mode: RouteMode;
+  default_image_url: string | null;
+  default_image_asset_id: string | null;
+  default_link_url: string | null;
   last_received_at: number | null;
   created_at: number;
   updated_at: number;
@@ -66,6 +69,10 @@ function serialize(row: SourceRow, baseUrl: string) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     channelIds: channelsFor(row.id),
+    defaultImageUrl: row.default_image_url || '',
+    defaultImageAssetId: row.default_image_asset_id || '',
+    defaultImageAssetUrl: row.default_image_asset_id ? `/api/assets/${row.default_image_asset_id}` : '',
+    defaultLinkUrl: row.default_link_url || '',
     endpoint: endpointFor(row, baseUrl),
     collector: row.recipe_id === 'ugreen-dxp' ? getUgreenCollectorView(row.id) : undefined,
   };
@@ -101,6 +108,9 @@ const sourceFields = z.object({
   routeMode: z.enum(['failover', 'broadcast']).default('failover'),
   channelIds: z.array(z.string()).default([]),
   enabled: z.boolean().default(true),
+  defaultImageUrl: z.union([z.string().url('默认图片地址格式不正确'), z.literal('')]).optional().default(''),
+  defaultImageAssetId: z.string().optional().default(''),
+  defaultLinkUrl: z.union([z.string().url('图文跳转链接格式不正确'), z.literal('')]).optional().default(''),
   collectorConfig: ugreenCollectorSchema.optional(),
 });
 
@@ -144,8 +154,9 @@ router.post('/', (request, response) => {
   db.transaction(() => {
     db.prepare(`
       INSERT INTO sources (
-        id, name, slug, recipe_id, token_hash, token_encrypted, enabled, route_mode, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, name, slug, recipe_id, token_hash, token_encrypted, enabled, route_mode,
+        default_image_url, default_image_asset_id, default_link_url, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       input.name,
@@ -155,6 +166,9 @@ router.post('/', (request, response) => {
       encryptSecret(token),
       input.enabled ? 1 : 0,
       input.routeMode,
+      input.defaultImageUrl || null,
+      input.defaultImageAssetId || null,
+      input.defaultLinkUrl || null,
       now,
       now,
     );
@@ -174,12 +188,16 @@ router.put('/:id', (request, response) => {
   const input = sourceUpdateSchema.parse(request.body);
   db.transaction(() => {
     db.prepare(`
-      UPDATE sources SET name = ?, recipe_id = ?, enabled = ?, route_mode = ?, updated_at = ? WHERE id = ?
+      UPDATE sources SET name = ?, recipe_id = ?, enabled = ?, route_mode = ?,
+        default_image_url = ?, default_image_asset_id = ?, default_link_url = ?, updated_at = ? WHERE id = ?
     `).run(
       input.name || existing.name,
       input.recipeId || existing.recipe_id,
       input.enabled === undefined ? existing.enabled : input.enabled ? 1 : 0,
       input.routeMode || existing.route_mode,
+      input.defaultImageUrl === undefined ? existing.default_image_url : input.defaultImageUrl || null,
+      input.defaultImageAssetId === undefined ? existing.default_image_asset_id : input.defaultImageAssetId || null,
+      input.defaultLinkUrl === undefined ? existing.default_link_url : input.defaultLinkUrl || null,
       Date.now(),
       existing.id,
     );
@@ -237,18 +255,22 @@ router.post('/:id/test', (request, response) => {
   };
   const rules = db.prepare('SELECT * FROM rules WHERE source_id = ? AND enabled = 1 ORDER BY priority ASC, created_at ASC')
     .all(source.id) as RuleRow[];
-  const applied = applyFirstRule(sample, rules);
+  const applied = applyFirstRule(sample, rules, {
+    imageUrl: source.default_image_url || undefined,
+    imageAssetId: source.default_image_asset_id || undefined,
+    linkUrl: source.default_link_url || undefined,
+  });
   const id = nanoid();
   const now = Date.now();
   db.prepare(`
     INSERT INTO events (
       id, source_id, request_id, status, title, body, event_type, severity,
-      image_url, link_url, raw_json, matched_rule_id, received_at
-    ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      image_url, image_asset_id, link_url, raw_json, matched_rule_id, received_at
+    ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, source.id, `manual-preview-${nanoid(8)}`, applied.notice.title, applied.notice.body,
     applied.notice.eventType, applied.notice.severity, applied.notice.imageUrl || null,
-    applied.notice.linkUrl || null, encryptStoredData(applied.notice.raw), applied.matchedRule?.id || null, now,
+    applied.imageAssetId || null, applied.notice.linkUrl || null, encryptStoredData(applied.notice.raw), applied.matchedRule?.id || null, now,
   );
   wakeWorker();
   response.status(202).json({ ok: true, eventId: id });
