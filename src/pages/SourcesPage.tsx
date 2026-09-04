@@ -8,6 +8,7 @@ import {
   Broadcast,
   Check,
   Copy,
+  HardDrives,
   ImageSquare,
   MagnifyingGlass,
   Plus,
@@ -23,6 +24,7 @@ import { channelMeta } from '../components/channelMeta';
 import { DialogShell } from '../components/DialogShell';
 import { Button, Callout, EmptyState, Field, Input, PageHeader, Skeleton, StatusBadge, Textarea } from '../components/ui';
 import { EndpointBlock } from '../components/EndpointBlock';
+import { emptyUgreenCollector, UgreenCollectorFields, type UgreenCollectorDraft } from '../components/UgreenCollectorFields';
 
 type WizardStep = 'choose' | 'ai' | 'configure' | 'done';
 
@@ -52,6 +54,8 @@ export function SourcesPage() {
   const [aiScreenshot, setAiScreenshot] = useState<string>();
   const [aiResult, setAiResult] = useState<Record<string, unknown>>();
   const [aiLoading, setAiLoading] = useState(false);
+  const [ugreenConfig, setUgreenConfig] = useState<UgreenCollectorDraft>({ ...emptyUgreenCollector });
+  const [testingUgreen, setTestingUgreen] = useState(false);
 
   const load = () => Promise.all([
     api<{ sources: Source[] }>('/api/sources'),
@@ -70,7 +74,7 @@ export function SourcesPage() {
   const recipe = recipes.find((item) => item.id === recipeId);
 
   const start = () => {
-    setStep('choose'); setSearch(''); setRecipeId('generic'); setName(''); setRouteMode('failover'); setChannelIds(channels.map((channel) => channel.id)); setCreated(undefined); setAiResult(undefined); setAiPrompt(''); setAiScreenshot(undefined); setOpen(true);
+    setStep('choose'); setSearch(''); setRecipeId('generic'); setName(''); setRouteMode('failover'); setChannelIds(channels.map((channel) => channel.id)); setCreated(undefined); setAiResult(undefined); setAiPrompt(''); setAiScreenshot(undefined); setUgreenConfig({ ...emptyUgreenCollector }); setOpen(true);
   };
   const chooseRecipe = (value: Recipe) => { setRecipeId(value.id); setName(value.id === 'generic' ? '' : value.name); setStep('configure'); };
   const toggleChannel = (id: string) => setChannelIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
@@ -78,10 +82,23 @@ export function SourcesPage() {
   const create = async (event: FormEvent) => {
     event.preventDefault(); setSaving(true);
     try {
-      const result = await api<{ source: Source }>('/api/sources', { method: 'POST', body: JSON.stringify({ name, recipeId, routeMode, channelIds, enabled: true }) });
+      const result = await api<{ source: Source }>('/api/sources', { method: 'POST', body: JSON.stringify({ name, recipeId, routeMode, channelIds, enabled: true, collectorConfig: recipeId === 'ugreen-dxp' ? ugreenConfig : undefined }) });
       setCreated(result.source); setStep('done'); toast.success('通知入口已创建'); void load();
     } catch (error) { toast.error(error instanceof Error ? error.message : '创建失败'); }
     finally { setSaving(false); }
+  };
+
+  const testUgreen = async () => {
+    setTestingUgreen(true);
+    const toastId = toast.loading('正在登录绿联 NAS 并读取消息中心');
+    try {
+      const result = await api<{ messageCount: number }>('/api/sources/ugreen/test-connection', { method: 'POST', body: JSON.stringify(ugreenConfig) });
+      toast.success(`连接成功，当前可读取 ${result.messageCount} 条系统消息`, { id: toastId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '连接绿联 NAS 失败', { id: toastId });
+    } finally {
+      setTestingUgreen(false);
+    }
   };
 
   const analyze = async () => {
@@ -128,14 +145,14 @@ export function SourcesPage() {
     {!sources ? <Skeleton lines={6} /> : sources.length ? <div className="source-list section-block">{sources.map((source) => {
       const sourceRecipe = recipes.find((item) => item.id === source.recipeId);
       return <article className={`source-row ${!source.enabled ? 'is-disabled' : ''}`} key={source.id}>
-        <span className="source-row__icon"><Broadcast size={22} weight="duotone" /></span>
-        <div className="source-row__main"><div className="source-row__title"><h2>{source.name}</h2><StatusBadge status={source.enabled ? (source.lastReceivedAt ? 'success' : 'untested') : 'archived'} label={source.enabled ? (source.lastReceivedAt ? '已收到数据' : '等待首条通知') : '已停用'} /></div><p>{sourceRecipe?.summary || '通用 Webhook 入口'}</p><div className="source-row__meta"><span>{source.routeMode === 'failover' ? '按顺序补位' : '同时发送'}</span><span>{source.channelIds.length} 个出口</span><span>最近收到：{timeAgo(source.lastReceivedAt)}</span></div></div>
-        <div className="source-row__endpoint"><code>{source.endpoint.url}</code><button type="button" className="icon-button" aria-label="复制接口地址" onClick={() => { void navigator.clipboard.writeText(source.endpoint.url); toast.success('接口地址已复制'); }}><Copy size={17} /></button></div>
+        <span className="source-row__icon">{source.collector ? <HardDrives size={22} weight="duotone" /> : <Broadcast size={22} weight="duotone" />}</span>
+        <div className="source-row__main"><div className="source-row__title"><h2>{source.name}</h2><StatusBadge status={!source.enabled ? 'archived' : source.collector?.lastError ? 'failed' : source.lastReceivedAt || source.collector?.lastSuccessAt ? 'success' : 'untested'} label={!source.enabled ? '已停用' : source.collector?.lastError ? '检查失败' : source.collector?.lastSuccessAt ? '采集正常' : source.lastReceivedAt ? '已收到数据' : '等待首条通知'} /></div><p>{sourceRecipe?.summary || '通用 Webhook 入口'}</p><div className="source-row__meta"><span>{source.routeMode === 'failover' ? '按顺序补位' : '同时发送'}</span><span>{source.channelIds.length} 个出口</span><span>{source.collector ? `最近检查：${timeAgo(source.collector.lastCheckedAt)}` : `最近收到：${timeAgo(source.lastReceivedAt)}`}</span></div></div>
+        {source.collector ? <div className="source-row__endpoint source-row__collector"><div><small>主动读取</small><code>{source.collector.baseUrl}</code></div><span>每 {source.collector.intervalMinutes} 分钟</span></div> : <div className="source-row__endpoint"><code>{source.endpoint.url}</code><button type="button" className="icon-button" aria-label="复制接口地址" onClick={() => { void navigator.clipboard.writeText(source.endpoint.url); toast.success('接口地址已复制'); }}><Copy size={17} /></button></div>}
         <div className="source-row__actions"><Link to={`/sources/${source.id}`}><Button variant="secondary" size="sm">配置<ArrowRight size={15} /></Button></Link>{source.enabled ? <Button variant="quiet" size="sm" onClick={() => void archive(source)}><Archive size={15} />停用</Button> : <Button variant="quiet" size="sm" onClick={() => void remove(source)}><Trash size={15} />删除</Button>}</div>
       </article>;
     })}</div> : <EmptyState icon={<WebhooksLogo size={38} />} title="还没有通知来源" description="选择项目或设备名称后，EasyNotice 会按它真实的配置页面生成专用指引。" action={<Button onClick={start}><Plus size={17} />接入第一个来源</Button>} />}
 
-    <DialogShell open={open} onOpenChange={setOpen} title={step === 'done' ? '入口已经准备好' : step === 'ai' ? 'AI 配置助手' : '添加通知入口'} description={step === 'choose' ? '先告诉 EasyNotice 是哪个应用，其余内容会自动准备。' : step === 'configure' ? '选择通知会从哪些渠道发出。' : undefined} size="xl" footer={step === 'configure' ? <><Button variant="secondary" onClick={() => setStep('choose')}><ArrowLeft size={16} />上一步</Button><Button type="submit" form="source-form" disabled={saving || !name}>{saving ? '正在创建…' : '创建入口'}<ArrowRight size={16} /></Button></> : step === 'done' ? <><Button variant="secondary" onClick={() => setOpen(false)}>完成</Button>{created ? <Link to={`/sources/${created.id}`} onClick={() => setOpen(false)}><Button>继续配置图片规则<ArrowRight size={16} /></Button></Link> : null}</> : undefined}>
+    <DialogShell open={open} onOpenChange={setOpen} title={step === 'done' ? '入口已经准备好' : step === 'ai' ? 'AI 配置助手' : '添加通知入口'} description={step === 'choose' ? '先告诉 EasyNotice 是哪个应用，其余内容会自动准备。' : step === 'configure' ? (recipe?.setupMode === 'ugreen-dxp' ? '连接绿联 NAS，再选择通知要发往的出口。' : '选择通知会从哪些渠道发出。') : undefined} size="xl" footer={step === 'configure' ? <><Button variant="secondary" onClick={() => setStep('choose')}><ArrowLeft size={16} />上一步</Button><Button type="submit" form="source-form" disabled={saving || testingUgreen || !name}>{saving ? '正在创建…' : '创建入口'}<ArrowRight size={16} /></Button></> : step === 'done' ? <><Button variant="secondary" onClick={() => setOpen(false)}>完成</Button>{created ? <Link to={`/sources/${created.id}`} onClick={() => setOpen(false)}><Button>{created.collector ? '查看采集状态' : '继续配置图片规则'}<ArrowRight size={16} /></Button></Link> : null}</> : undefined}>
       {step === 'choose' ? <div className="wizard-choose">
         <button type="button" className="ai-entry" onClick={() => setStep('ai')}><span><Brain size={25} weight="duotone" /></span><div><strong>不知道怎么选？让 AI 看截图</strong><p>粘贴项目名或上传配置页面截图，只生成建议，不会自动修改设置。</p></div><ArrowRight size={19} /></button>
         <div className="search-box"><MagnifyingGlass size={18} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索 Lucky、MDC-NG、监控…" /></div>
@@ -154,11 +171,12 @@ export function SourcesPage() {
       {step === 'configure' ? <form id="source-form" className="dialog-form" onSubmit={create}>
         <div className="selected-recipe"><span><Check size={18} weight="bold" /></span><div><small>已选择预设</small><strong>{recipe?.name || '通用 Webhook'}</strong></div><button type="button" onClick={() => setStep('choose')}>更换</button></div>
         <Field label="入口名称" hint="建议直接使用 Docker 或应用名称，通知列表更容易识别" required><Input value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：Lucky 主路由" /></Field>
+        {recipe?.setupMode === 'ugreen-dxp' ? <><UgreenCollectorFields value={ugreenConfig} onChange={setUgreenConfig} showImportRecent /><Button type="button" variant="secondary" onClick={() => void testUgreen()} disabled={testingUgreen || !ugreenConfig.baseUrl || !ugreenConfig.username || !ugreenConfig.password}><HardDrives size={17} />{testingUgreen ? '正在测试连接…' : '测试绿联连接'}</Button></> : null}
         <fieldset className="field-group"><legend>发送方式</legend><label className={`choice-card ${routeMode === 'failover' ? 'is-selected' : ''}`}><input type="radio" name="routeMode" value="failover" checked={routeMode === 'failover'} onChange={() => setRouteMode('failover')} /><span><strong>按顺序补位（推荐）</strong><small>第一个失败才尝试第二个，适合企微应用 + 群机器人。</small></span></label><label className={`choice-card ${routeMode === 'broadcast' ? 'is-selected' : ''}`}><input type="radio" name="routeMode" value="broadcast" checked={routeMode === 'broadcast'} onChange={() => setRouteMode('broadcast')} /><span><strong>所有渠道都发送</strong><small>每条通知同时发到全部已选渠道。</small></span></label></fieldset>
         <fieldset className="field-group"><legend>通知出口</legend>{channels.length ? <div className="route-options">{channels.map((channel, index) => { const meta = channelMeta[channel.type]; const Icon = meta.icon; const selected = channelIds.includes(channel.id); return <label className={`route-option ${selected ? 'is-selected' : ''}`} key={channel.id}><input type="checkbox" checked={selected} onChange={() => toggleChannel(channel.id)} /><span className="channel-logo"><Icon size={19} /></span><span><strong>{channel.name}</strong><small>{routeMode === 'failover' && selected ? `顺位 ${channelIds.indexOf(channel.id) + 1}` : meta.short}</small></span>{selected ? <Check size={17} weight="bold" /> : null}</label>; })}</div> : <Callout tone="warning">还没有可用通知出口。可以先创建入口，之后再到详情页添加路由。</Callout>}</fieldset>
       </form> : null}
 
-      {step === 'done' && created ? <div className="wizard-done"><div className="success-orb"><Check size={30} weight="bold" /></div><div><h2>{created.name} 已经可以接收通知</h2><p>{recipe?.setupMode === 'openwrt-pushbot' ? '复制下面整段配置，粘贴到 OpenWrt 的“自定义推送”大文本框。保存后点一次“发送测试”。' : '将下面内容粘贴到原应用。保存后先发一条测试，在通知记录中确认字段是否识别正确。'}</p></div><EndpointBlock source={created} recipe={recipe} />{recipe ? <div className="setup-steps"><h3>在 {recipe.name} 中这样填写</h3>{recipe.steps.map((item, index) => <div key={item}><span>{index + 1}</span><p>{item}</p></div>)}</div> : null}</div> : null}
+      {step === 'done' && created ? <div className="wizard-done"><div className="success-orb"><Check size={30} weight="bold" /></div><div><h2>{created.name} 已经可以接收通知</h2><p>{recipe?.setupMode === 'ugreen-dxp' ? 'EasyNotice 已接管绿联系统消息，不需要再到绿联后台填写 Webhook。第一次检查会自动开始。' : recipe?.setupMode === 'openwrt-pushbot' ? '复制下面整段配置，粘贴到 OpenWrt 的“自定义推送”大文本框。保存后点一次“发送测试”。' : '将下面内容粘贴到原应用。保存后先发一条测试，在通知记录中确认字段是否识别正确。'}</p></div>{recipe?.setupMode === 'ugreen-dxp' ? <Callout title="主动采集已经启用">EasyNotice 将每 {created.collector?.intervalMinutes || 5} 分钟检查一次 {created.collector?.baseUrl}。密码已经加密保存。</Callout> : <EndpointBlock source={created} recipe={recipe} />}{recipe ? <div className="setup-steps"><h3>{recipe.setupMode === 'ugreen-dxp' ? '接下来可以这样检查' : `在 ${recipe.name} 中这样填写`}</h3>{recipe.steps.map((item, index) => <div key={item}><span>{index + 1}</span><p>{item}</p></div>)}</div> : null}</div> : null}
     </DialogShell>
   </div>;
 }

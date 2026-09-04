@@ -49,6 +49,16 @@ export function buildPreviewSample(sourceName: string, recipeId: string): Normal
     };
   }
 
+  if (recipeId === 'ugreen-dxp') {
+    return {
+      title: '【测试】绿联 NAS 系统通知',
+      body: `时间：${time}\n设备：书房 NAS\n消息：系统检查已完成，存储空间与磁盘状态正常\n来源：UGOS Pro 消息中心\n说明：这是 EasyNotice 预览消息，不代表真实设备状态。`,
+      eventType: 'ugreen_info',
+      severity: 'info',
+      raw: { provider: 'ugreen-dxp', level: 'info', body: '系统检查已完成，存储空间与磁盘状态正常', source: sourceName },
+    };
+  }
+
   if (recipeId === 'mdc-ng' || recipeId === 'media-hub') {
     return {
       title: '【测试】影片整理完成',

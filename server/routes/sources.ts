@@ -10,6 +10,14 @@ import { applyFirstRule } from '../templates.js';
 import type { NormalizedNotice, RuleRow, RouteMode } from '../types.js';
 import { wakeWorker } from '../worker.js';
 import { buildPreviewSample } from '../preview-samples.js';
+import {
+  createUgreenCollector,
+  getUgreenCollectorView,
+  runUgreenCollector,
+  testStoredUgreenConnection,
+  testUgreenConnection,
+  updateUgreenCollector,
+} from '../ugreen-collector.js';
 
 const router = Router();
 
@@ -59,6 +67,7 @@ function serialize(row: SourceRow, baseUrl: string) {
     updatedAt: row.updated_at,
     channelIds: channelsFor(row.id),
     endpoint: endpointFor(row, baseUrl),
+    collector: row.recipe_id === 'ugreen-dxp' ? getUgreenCollectorView(row.id) : undefined,
   };
 }
 
@@ -77,12 +86,35 @@ router.get('/:id', (request, response) => {
   response.json({ source: serialize(row, requestBaseUrl(request)) });
 });
 
-const sourceSchema = z.object({
+const ugreenCollectorSchema = z.object({
+  baseUrl: z.string().trim().min(1, '请填写绿联管理地址').max(500),
+  username: z.string().trim().min(1, '请填写绿联用户名').max(128),
+  password: z.string().min(1, '请填写绿联密码').max(256),
+  allowSelfSigned: z.boolean().default(false),
+  intervalMinutes: z.number().int().min(1).max(60).default(5),
+  importRecent: z.boolean().default(false),
+});
+
+const sourceFields = z.object({
   name: z.string().trim().min(1, '请填写入口名称').max(80),
   recipeId: z.string().trim().min(1).default('generic'),
   routeMode: z.enum(['failover', 'broadcast']).default('failover'),
   channelIds: z.array(z.string()).default([]),
   enabled: z.boolean().default(true),
+  collectorConfig: ugreenCollectorSchema.optional(),
+});
+
+const sourceSchema = sourceFields.superRefine((input, context) => {
+  if (input.recipeId === 'ugreen-dxp' && !input.collectorConfig) {
+    context.addIssue({ code: 'custom', path: ['collectorConfig'], message: '请填写绿联 NAS 的连接信息' });
+  }
+});
+const sourceUpdateSchema = sourceFields.omit({ collectorConfig: true }).partial();
+
+router.post('/ugreen/test-connection', async (request, response) => {
+  const input = ugreenCollectorSchema.parse(request.body);
+  const result = await testUgreenConnection(input);
+  response.json({ ok: true, ...result });
 });
 
 function uniqueSlug(preferred: string): string {
@@ -127,6 +159,7 @@ router.post('/', (request, response) => {
       now,
     );
     replaceChannels(id, input.channelIds);
+    if (input.recipeId === 'ugreen-dxp' && input.collectorConfig) createUgreenCollector(id, input.collectorConfig);
   })();
   const row = db.prepare('SELECT * FROM sources WHERE id = ?').get(id) as SourceRow;
   response.status(201).json({ source: serialize(row, requestBaseUrl(request)) });
@@ -138,7 +171,7 @@ router.put('/:id', (request, response) => {
     response.status(404).json({ error: '通知入口不存在' });
     return;
   }
-  const input = sourceSchema.partial().parse(request.body);
+  const input = sourceUpdateSchema.parse(request.body);
   db.transaction(() => {
     db.prepare(`
       UPDATE sources SET name = ?, recipe_id = ?, enabled = ?, route_mode = ?, updated_at = ? WHERE id = ?
@@ -167,6 +200,26 @@ router.post('/:id/regenerate-token', (request, response) => {
     .run(hashToken(token), encryptSecret(token), Date.now(), existing.id);
   const row = db.prepare('SELECT * FROM sources WHERE id = ?').get(existing.id) as SourceRow;
   response.json({ source: serialize(row, requestBaseUrl(request)) });
+});
+
+router.put('/:id/ugreen', (request, response) => {
+  const existing = db.prepare("SELECT id FROM sources WHERE id = ? AND recipe_id = 'ugreen-dxp'").get(request.params.id);
+  if (!existing) {
+    response.status(404).json({ error: '绿联通知入口不存在' });
+    return;
+  }
+  const input = ugreenCollectorSchema.partial().parse(request.body);
+  response.json({ collector: updateUgreenCollector(request.params.id, input) });
+});
+
+router.post('/:id/ugreen/test', async (request, response) => {
+  const result = await testStoredUgreenConnection(request.params.id);
+  response.json({ ok: true, ...result });
+});
+
+router.post('/:id/ugreen/run', async (request, response) => {
+  const result = await runUgreenCollector(request.params.id);
+  response.json({ ok: true, ...result, collector: getUgreenCollectorView(request.params.id) });
 });
 
 router.post('/:id/test', (request, response) => {

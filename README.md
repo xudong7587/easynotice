@@ -11,10 +11,10 @@
 一条通知只有三段路：
 
 ```text
-Lucky / OpenWrt / 影视应用 / 监控工具
+Lucky / OpenWrt / 绿联 NAS / 影视应用 / 监控工具
                     ↓
           EasyNotice 通知入口
-        识别内容 → 套用规则 → 选择路线
+     Webhook 或主动采集 → 套用规则 → 选择路线
                     ↓
        企微应用 / 企微机器人 / Telegram / Bark
 ```
@@ -24,7 +24,7 @@ Lucky / OpenWrt / 影视应用 / 监控工具
 - **路线**：指定某个入口要发往哪些出口，是逐个补位，还是全部发送。
 - **内容规则**：按通知类型改标题、正文、图片和链接。
 
-EasyNotice 不会主动猜测其他应用里发生了什么。原应用至少需要支持自定义 Webhook、HTTP 回调或可填写的请求地址；如果它只允许填写某家通知服务的专用 Key、完全不能自定义 URL，就不能直接接入。
+大多数应用通过 Webhook 把消息交给 EasyNotice；绿联 UGOS Pro 是特殊入口，由 EasyNotice 使用加密保存的本地账号定时读取系统消息中心。其他没有专用适配器的应用，仍需要支持自定义 Webhook、HTTP 回调或可填写的请求地址。
 
 ## 它解决什么
 
@@ -35,11 +35,12 @@ EasyNotice 不会主动猜测其他应用里发生了什么。原应用至少需
 | 企业微信应用因可信 IP 变化而失败 | 按顺序自动尝试企微机器人、Telegram 等备用渠道 |
 | 同一种应用的不同事件难以分辨 | 按事件类型设置不同标题、正文、图片和点击链接 |
 | Webhook 显示成功，却不知道消息去了哪里 | 记录每个出口的尝试次数、耗时、响应和失败原因 |
-| 配置术语太多 | 页面按“选择应用 → 复制配置 → 发送测试”的顺序引导 |
+| 绿联系统没有可填写的通用 Webhook | EasyNotice 主动登录本地管理接口、定时读取并去重系统消息 |
+| 配置术语太多 | 页面按“选择应用 → 连接或复制配置 → 发送测试”的顺序引导 |
 
 当前支持：
 
-- 入口预设：通用 Webhook、Lucky、OpenWrt 全能推送 / PushBot、影视库中枢、影音与刮削、Uptime Kuma、Watchtower / Shoutrrr。
+- 入口预设：绿联 NAS / UGOS Pro 主动采集、通用 Webhook、Lucky、OpenWrt 全能推送 / PushBot、影视库中枢、影音与刮削、Uptime Kuma、Watchtower / Shoutrrr。
 - 通知出口：企业微信应用、企业微信群机器人、Telegram Bot、Bark。
 - 路由：失败后按顺序补位，或所有出口都发送。
 - 内容：字段自动识别、条件规则、安全模板、图片素材库。
@@ -96,8 +97,8 @@ http://NAS的局域网IP:18088
 
 1. **完成首次设置**：创建至少 8 位管理密码；“其他容器访问地址”填写来源设备真正能访问的地址。
 2. **添加通知出口**：想最快跑通，先选企业微信群机器人或 Bark；成功后再添加企业微信应用、Telegram 和备用路线。
-3. **添加通知入口**：选择 Lucky、OpenWrt 等预设；不确定时选“通用 Webhook”。
-4. **复制到原应用**：EasyNotice 会给出地址、请求方式、请求体，或像 OpenWrt PushBot 那样给出必须整段粘贴的配置。
+3. **添加通知入口**：选择 Lucky、OpenWrt、绿联 NAS 等预设；不确定时选“通用 Webhook”。
+4. **完成接入**：Webhook 应用复制地址和请求体；OpenWrt PushBot 复制整段配置；绿联 NAS 只填写本地管理地址和账号。
 5. **发送测试并看记录**：原应用提示 Webhook 成功只代表 EasyNotice 已收到；最终是否送达，以“通知记录”里的出口详情为准。
 
 ## 出口怎么选
@@ -127,6 +128,7 @@ Telegram Bot（顺位 3，可选）
 | --- | --- |
 | Lucky | 按 DDNS、公网 IP、STUN、设备上下线、计划任务等场景生成请求体 |
 | OpenWrt 全能推送 / PushBot | 生成一整段配置，直接覆盖粘贴到“自定义推送”大文本框 |
+| 绿联 NAS / UGOS Pro | 填写管理地址和本地账号后主动读取消息中心，不需要寻找 Webhook |
 | MoviePilot 等影视库工具 | 给出 WebHook 插件接法；其他工具需确认当前版本支持自定义 URL |
 | MDC-NG、Emby、Jellyfin、Plex | 提供常见 Endpoint、POST、请求头和 JSON 示例 |
 | Uptime Kuma | 使用通知里的 Webhook 类型接入 |
@@ -200,7 +202,7 @@ Webhook 的成功响应表示通知已经进入 EasyNotice。打开“通知记�
 ## 安全说明
 
 - 管理密码使用 bcrypt 保存；登录失败有频率限制。
-- 渠道密钥、AI Key、入口原始内容等敏感数据使用 AES-256-GCM 加密保存。
+- 渠道密钥、AI Key、绿联 NAS 密码、入口原始内容等敏感数据使用 AES-256-GCM 加密保存。
 - Webhook 原始内容会对常见密码、Token、Cookie 字段脱敏后入库。
 - 每个入口地址本身就是凭证，不要发布到公开截图或日志；更换入口密钥后，旧地址立即失效。
 - 通知标题和正文用于搜索，会保存在数据库中；不要把密码或完整 Token 当作通知内容发送。
@@ -214,3 +216,5 @@ Webhook 的成功响应表示通知已经进入 EasyNotice。打开“通知记�
 - [问题反馈](https://github.com/xudong7587/easynotice/issues)
 
 EasyNotice 仍在持续完善。如果某个 NAS 应用只有你见过的特殊配置页面，提交项目名和打码后的截图，会比只说“Webhook 接不上”更容易把它做成真正可复制的入口预设。
+
+绿联 UGOS Pro 接口流程参考了 Apache-2.0 项目 [bilibili-koryking/nasnotify](https://github.com/bilibili-koryking/nasnotify)，EasyNotice 在此基础上重新实现了加密凭据、定时采集、去重、统一规则和多出口路由。

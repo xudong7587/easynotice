@@ -63,7 +63,7 @@ export function EventsPage() {
         <div className="event-detail__summary"><div><SeverityIcon severity={detail.severity} size={22} /><span><small>识别后的正文</small><p>{detail.body}</p></span></div><StatusBadge status={detail.status} /></div>
         {detail.error ? <Callout tone="danger" title="最终失败原因">{detail.error}</Callout> : detail.status === 'partial' ? <Callout tone="warning" title="备用渠道完成了补位">主渠道发送失败，但后续渠道已经成功送达。</Callout> : null}
         <section><h3>投递过程</h3>{detail.deliveries.length ? <div className="delivery-timeline">{detail.deliveries.map((delivery) => { const meta = channelMeta[delivery.channelType]; const Icon = delivery.status === 'success' ? CheckCircle : delivery.status === 'failed' ? WarningCircle : Clock; return <div className={`delivery-step delivery-step--${delivery.status}`} key={delivery.id}><span className="delivery-step__icon"><Icon size={18} weight="fill" /></span><div><div><strong>{delivery.channelName}</strong><StatusBadge status={delivery.status} /></div><p>{delivery.error || delivery.detail || (delivery.status === 'skipped' ? '前一个渠道已经送达' : '等待结果')}</p><small>{meta.short}{delivery.attempt > 0 ? ` · 第 ${delivery.attempt} 次尝试` : ''}{delivery.durationMs !== undefined ? ` · ${delivery.durationMs} ms` : ''}</small></div></div>; })}</div> : <Callout>消息仍在队列中，几秒后刷新详情即可看到投递结果。</Callout>}</section>
-        <details className="raw-payload"><summary>查看原始 Webhook 数据</summary><div><small>请求 ID：{detail.requestId}</small><pre>{JSON.stringify(detail.raw, null, 2)}</pre></div></details>
+        <details className="raw-payload"><summary>查看来源的原始数据</summary><div><small>记录 ID：{detail.requestId}</small><pre>{JSON.stringify(detail.raw, null, 2)}</pre></div></details>
       </div>}
     </DialogShell>
   </div>;

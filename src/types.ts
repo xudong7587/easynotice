@@ -26,7 +26,7 @@ export interface Recipe {
   steps: string[];
   tips: string[];
   searchTerms: string[];
-  setupMode?: 'openwrt-pushbot';
+  setupMode?: 'openwrt-pushbot' | 'ugreen-dxp';
   webhookTemplates?: RecipeWebhookTemplate[];
 }
 
@@ -67,6 +67,22 @@ export interface Source {
   updatedAt: number;
   channelIds: string[];
   endpoint: SourceEndpoint;
+  collector?: UgreenCollector;
+}
+
+export interface UgreenCollector {
+  type: 'ugreen-dxp';
+  baseUrl: string;
+  username: string;
+  passwordConfigured: boolean;
+  allowSelfSigned: boolean;
+  intervalMinutes: number;
+  importRecent: boolean;
+  initialized: boolean;
+  lastCheckedAt?: number;
+  lastSuccessAt?: number;
+  lastError?: string;
+  nextRunAt?: number;
 }
 
 export interface NoticeRule {

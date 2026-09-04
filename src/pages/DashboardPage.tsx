@@ -52,7 +52,7 @@ export function DashboardPage() {
 
   const steps = [
     { done: data.quickStart.hasChannel, title: '添加第一个通知出口', detail: '建议先添加企业微信机器人，测试成功后再继续。', to: '/channels' },
-    { done: data.quickStart.hasSource, title: '接入一个 Docker 应用', detail: '选择 Lucky、MDC-NG 或通用 Webhook，复制系统给出的内容。', to: '/sources' },
+    { done: data.quickStart.hasSource, title: '接入一个应用或设备', detail: '应用可以复制 Webhook，绿联 NAS 可以直接连接消息中心。', to: '/sources' },
     { done: data.quickStart.hasRoute, title: '排好主渠道与备用渠道', detail: '把企微应用放在第一位，群机器人放在第二位。', to: '/sources' },
   ];
   const complete = steps.every((step) => step.done);
@@ -61,7 +61,7 @@ export function DashboardPage() {
     <div>
       <PageHeader
         title="总览"
-        description="从收到 Webhook 到送达手机，每一步都能在这里确认。"
+        description="从收到或采集通知到送达手机，每一步都能在这里确认。"
         action={<Link to="/sources"><Button><Plus size={17} />添加通知入口</Button></Link>}
       />
 
@@ -83,7 +83,7 @@ export function DashboardPage() {
       )}
 
       <section className="metrics-grid section-block" aria-label="最近 24 小时数据">
-        <div className="metric"><span className="metric__icon"><Broadcast size={21} /></span><div><small>已接入应用</small><strong>{data.metrics.sourceCount}</strong></div></div>
+        <div className="metric"><span className="metric__icon"><Broadcast size={21} /></span><div><small>已接入来源</small><strong>{data.metrics.sourceCount}</strong></div></div>
         <div className="metric"><span className="metric__icon"><PaperPlaneTilt size={21} /></span><div><small>24 小时通知</small><strong>{data.metrics.eventCount24h}</strong></div></div>
         <div className="metric"><span className="metric__icon"><CheckCircle size={21} /></span><div><small>送达率</small><strong>{data.metrics.successRate24h === null ? '暂无' : `${data.metrics.successRate24h}%`}</strong></div></div>
         <div className="metric"><span className="metric__icon"><WarningCircle size={21} /></span><div><small>发送失败</small><strong>{data.metrics.failedCount24h}</strong></div></div>

@@ -23,6 +23,7 @@ import { channelMeta } from '../components/channelMeta';
 import { DialogShell } from '../components/DialogShell';
 import { Button, Callout, Field, Input, NativeSelect, PageHeader, Skeleton, StatusBadge, Textarea } from '../components/ui';
 import { EndpointBlock } from '../components/EndpointBlock';
+import { UgreenCollectorPanel } from '../components/UgreenCollectorPanel';
 
 interface RuleDraft {
   name: string;
@@ -136,16 +137,16 @@ export function SourceDetailPage() {
 
   return <div>
     <Link to="/sources" className="back-link"><ArrowLeft size={16} />返回通知入口</Link>
-    <PageHeader title={source.name} description={`${recipe?.name || '通用 Webhook'} · ${source.lastReceivedAt ? `最近收到于 ${timeAgo(source.lastReceivedAt)}` : '等待第一条真实通知'}`} action={<Button variant="secondary" onClick={test}><TestTube size={17} />整链路测试预览</Button>} />
+    <PageHeader title={source.name} description={`${recipe?.name || '通用 Webhook'} · ${source.collector?.lastCheckedAt ? `最近检查于 ${timeAgo(source.collector.lastCheckedAt)}` : source.lastReceivedAt ? `最近收到于 ${timeAgo(source.lastReceivedAt)}` : '等待第一条真实通知'}`} action={<Button variant="secondary" onClick={test}><TestTube size={17} />整链路测试预览</Button>} />
 
     <div className="detail-layout">
       <div className="detail-main">
-        <section className="panel section-block">
+        {source.collector ? <UgreenCollectorPanel source={source} onUpdated={(collector) => setSource({ ...source, collector })} /> : <section className="panel section-block">
           <div className="panel__header"><div><h2>{recipe?.setupMode === 'openwrt-pushbot' ? '复制整段 PushBot 配置' : '复制到原应用'}</h2><p>{recipe?.setupMode === 'openwrt-pushbot' ? '在 OpenWrt 中完整粘贴一次，不需要分别填写地址、请求头和请求体。' : '按照下面四项填写即可，不需要自行拼接参数。'}</p></div><StatusBadge status={source.lastReceivedAt ? 'success' : 'untested'} label={source.lastReceivedAt ? '入口正常' : '等待测试'} /></div>
           <EndpointBlock source={source} recipe={recipe} />
           {recipe ? <div className="setup-steps setup-steps--compact"><h3>{recipe.name} 配置说明</h3>{recipe.steps.map((item, index) => <div key={item}><span>{index + 1}</span><p>{item}</p></div>)}{recipe.tips.map((tip) => <Callout key={tip}>{tip}</Callout>)}</div> : null}
           <div className="panel__footer"><Button variant="quiet" size="sm" onClick={regenerate}><Repeat size={16} />更换接口密钥</Button></div>
-        </section>
+        </section>}
 
         <section className="panel section-block">
           <div className="panel__header"><div><h2>不同通知使用不同图片</h2><p>按标题、正文或事件类型匹配。第一条命中的规则生效。</p></div><Button size="sm" onClick={openNewRule}><Plus size={16} />添加样式规则</Button></div>

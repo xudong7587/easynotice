@@ -22,7 +22,7 @@ export interface Recipe {
   steps: string[];
   tips: string[];
   searchTerms: string[];
-  setupMode?: 'openwrt-pushbot';
+  setupMode?: 'openwrt-pushbot' | 'ugreen-dxp';
   webhookTemplates?: RecipeWebhookTemplate[];
 }
 
@@ -205,6 +205,30 @@ export const recipes: Recipe[] = [
     ],
     setupMode: 'openwrt-pushbot',
     searchTerms: ['openwrt', 'istore', 'istoreos', '软路由', 'pushbot', 'wechatpush', '全能推送', '自定义api'],
+  },
+  {
+    id: 'ugreen-dxp',
+    name: '绿联 NAS / UGOS Pro',
+    category: 'NAS 系统通知',
+    summary: 'EasyNotice 定时读取绿联 DXP 的系统消息，不需要在绿联系统里寻找 Webhook。',
+    confidence: 'community',
+    method: 'POST',
+    contentType: 'application/json',
+    pathStyle: 'hook',
+    bodyTemplate: '{}',
+    steps: [
+      '填写浏览器访问绿联管理后台时使用的局域网地址，例如 http://192.168.1.20:9999。',
+      '填写绿联本地用户的用户名和密码。EasyNotice 会加密保存密码，只用于登录这台 NAS。',
+      '先点击“测试连接”；成功后，EasyNotice 会按设定间隔检查系统通知并自动去重。',
+      '新通知会直接进入当前入口的图片规则和出口路由，不需要再配置企业微信机器人。',
+    ],
+    tips: [
+      '首次连接默认只记录当前已有消息，不会补发历史通知；需要补发时可在创建入口时主动勾选。',
+      '如果绿联账号启用了登录双重验证，当前本地接口可能无法完成无人值守登录；建议单独建立一个权限受控的本地账号。',
+      'HTTPS 使用自签名证书时，需要打开“允许自签名证书”；只应对你确认属于自己的 NAS 使用。',
+    ],
+    setupMode: 'ugreen-dxp',
+    searchTerms: ['绿联', 'ugreen', 'ugos', 'ugos pro', 'dxp', 'dxp2800', 'dxp4800', 'dxp6800', 'nas系统'],
   },
   {
     id: 'media-hub',

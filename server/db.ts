@@ -65,6 +65,26 @@ db.exec(`
     PRIMARY KEY (source_id, channel_id)
   );
 
+  CREATE TABLE IF NOT EXISTS ugreen_collectors (
+    source_id TEXT PRIMARY KEY REFERENCES sources(id) ON DELETE CASCADE,
+    config_encrypted TEXT NOT NULL,
+    interval_minutes INTEGER NOT NULL DEFAULT 5 CHECK (interval_minutes BETWEEN 1 AND 60),
+    import_recent INTEGER NOT NULL DEFAULT 0,
+    initialized INTEGER NOT NULL DEFAULT 0,
+    last_checked_at INTEGER,
+    last_success_at INTEGER,
+    last_error TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS ugreen_seen_messages (
+    source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+    fingerprint TEXT NOT NULL,
+    seen_at INTEGER NOT NULL,
+    PRIMARY KEY (source_id, fingerprint)
+  );
+
   CREATE TABLE IF NOT EXISTS assets (
     id TEXT PRIMARY KEY,
     original_name TEXT NOT NULL,
@@ -140,6 +160,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_deliveries_event ON deliveries(event_id);
   CREATE INDEX IF NOT EXISTS idx_rules_source_priority ON rules(source_id, priority);
   CREATE INDEX IF NOT EXISTS idx_wecom_callback_channel_received ON wecom_callback_events(channel_id, received_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_ugreen_collectors_due ON ugreen_collectors(last_checked_at);
+  CREATE INDEX IF NOT EXISTS idx_ugreen_seen_source_time ON ugreen_seen_messages(source_id, seen_at DESC);
   CREATE UNIQUE INDEX IF NOT EXISTS idx_wecom_callback_message_id ON wecom_callback_events(channel_id, message_id) WHERE message_id IS NOT NULL;
 `);
 
