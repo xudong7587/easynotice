@@ -125,18 +125,58 @@ function apiSucceeded(body: Record<string, unknown>): boolean {
   return Number(body.code) === 200;
 }
 
-function encryptWithRsa(encodedPublicKey: string, plaintext: string): string {
-  let publicKey: string;
+function decodeBase64(value: string): Buffer {
+  const normalized = value.replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/');
+  return Buffer.from(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '='), 'base64');
+}
+
+function parseUgreenPublicKey(encodedPublicKey: string): crypto.KeyObject {
+  const raw = encodedPublicKey.trim();
+  const candidates: Array<string | Buffer> = [raw];
   try {
-    publicKey = Buffer.from(encodedPublicKey, 'base64').toString('utf8');
-    if (!publicKey.includes('PUBLIC KEY')) throw new Error('invalid key');
+    const decoded = decodeBase64(raw);
+    candidates.push(decoded, decoded.toString('utf8'));
   } catch {
-    throw new Error('绿联 NAS 返回的登录公钥无效');
+    // The raw value may already be PEM text.
   }
+
+  for (const candidate of candidates) {
+    const normalized = typeof candidate === 'string'
+      ? candidate.replace(/\\r\\n|\\n|\\r/g, '\n').trim()
+      : candidate;
+    try {
+      return crypto.createPublicKey(normalized);
+    } catch {
+      // Some UGOS versions label an SPKI key as "RSA PUBLIC KEY". Parse the
+      // DER payload independently of the PEM label to remain compatible.
+    }
+
+    if (typeof normalized !== 'string') continue;
+    const match = normalized.match(/-----BEGIN [^-]+-----([\s\S]+?)-----END [^-]+-----/);
+    if (!match) continue;
+    const der = decodeBase64(match[1]);
+    for (const type of ['spki', 'pkcs1'] as const) {
+      try {
+        return crypto.createPublicKey({ key: der, format: 'der', type });
+      } catch {
+        // Try the other RSA public-key encoding.
+      }
+    }
+  }
+  throw new Error('绿联 NAS 返回的登录公钥格式不受支持');
+}
+
+export function encryptUgreenRsa(encodedPublicKey: string, plaintext: string, label = '登录凭据'): string {
+  const publicKey = parseUgreenPublicKey(encodedPublicKey);
   try {
-    return crypto.publicEncrypt({ key: publicKey, padding: crypto.constants.RSA_PKCS1_PADDING }, Buffer.from(plaintext, 'utf8')).toString('base64');
+    // Match nasnotify's Crypto.Cipher.PKCS1_v1_5 behavior exactly: one RSA
+    // operation followed by Base64 encoding of the ciphertext.
+    return crypto.publicEncrypt(
+      { key: publicKey, padding: crypto.constants.RSA_PKCS1_PADDING },
+      Buffer.from(plaintext, 'utf8'),
+    ).toString('base64');
   } catch {
-    throw new Error('无法加密绿联登录凭据');
+    throw new Error(`无法加密绿联${label}`);
   }
 }
 
@@ -158,7 +198,7 @@ export async function loginUgreen(credentials: UgreenCredentials): Promise<Ugree
     '/ugreen/v1/verify/login',
     {
       username: credentials.username,
-      password: encryptWithRsa(rsaToken, credentials.password),
+      password: encryptUgreenRsa(rsaToken, credentials.password, '登录密码'),
       keepalive: true,
       is_simple: true,
     },
@@ -174,7 +214,7 @@ export async function loginUgreen(credentials: UgreenCredentials): Promise<Ugree
   const token = textValue(data.token);
   const publicKey = textValue(data.public_key || data.publicKey);
   if (!tokenId || !token || !publicKey) throw new Error('绿联登录成功，但没有返回完整会话信息');
-  return { tokenId, token: encryptWithRsa(publicKey, token) };
+  return { tokenId, token: encryptUgreenRsa(publicKey, token, '会话令牌') };
 }
 
 async function requestMessages(credentials: UgreenCredentials, session: UgreenSession): Promise<JsonResponse> {

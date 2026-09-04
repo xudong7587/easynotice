@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import http from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { fetchUgreenRawMessages, normalizeUgreenBaseUrl, normalizeUgreenMessage } from './ugreen.js';
+import { encryptUgreenRsa, fetchUgreenRawMessages, normalizeUgreenBaseUrl, normalizeUgreenMessage } from './ugreen.js';
 
 const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
 const encodedPublicKey = Buffer.from(publicKey.export({ type: 'spki', format: 'pem' })).toString('base64');
@@ -9,7 +9,10 @@ let server: http.Server;
 let baseUrl = '';
 
 function decrypt(value: string): string {
-  return crypto.privateDecrypt({ key: privateKey, padding: crypto.constants.RSA_PKCS1_PADDING }, Buffer.from(value, 'base64')).toString('utf8');
+  return crypto.privateDecrypt(
+    { key: privateKey, padding: crypto.constants.RSA_PKCS1_PADDING },
+    Buffer.from(value, 'base64'),
+  ).toString('utf8');
 }
 
 beforeAll(async () => {
@@ -54,6 +57,14 @@ describe('UGREEN client', () => {
     const result = await fetchUgreenRawMessages({ baseUrl, username: 'sunny', password: 'nas-password', allowSelfSigned: false });
     expect(result.messages).toHaveLength(1);
     expect(result.messages[0]).toMatchObject({ body: '磁盘温度较高', level: 'important' });
+  });
+
+  it('accepts UGOS public keys whose PEM label does not match the SPKI payload', () => {
+    const spkiDer = publicKey.export({ type: 'spki', format: 'der' });
+    const body = spkiDer.toString('base64').match(/.{1,64}/g)?.join('\n');
+    const mislabeledPem = `-----BEGIN RSA PUBLIC KEY-----\n${body}\n-----END RSA PUBLIC KEY-----`;
+    const encoded = Buffer.from(mislabeledPem).toString('base64');
+    expect(decrypt(encryptUgreenRsa(encoded, '兼容登录密码'))).toBe('兼容登录密码');
   });
 
   it('normalizes UGREEN messages for the EasyNotice routing pipeline', () => {
