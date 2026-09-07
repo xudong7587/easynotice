@@ -211,6 +211,18 @@ const migrateLegacySourceRecipes = db.transaction(() => {
   }
 });
 
+// A collector row is the durable source of truth for a UGREEN entrance. Older
+// builds could save that entrance back as a generic webhook, which made the
+// scheduler silently skip it forever. Repair existing databases on startup.
+const repairCollectorSourceRecipes = db.transaction(() => {
+  const now = Date.now();
+  db.prepare(`
+    UPDATE sources SET recipe_id = 'ugreen-dxp', updated_at = ?
+    WHERE recipe_id <> 'ugreen-dxp'
+      AND id IN (SELECT source_id FROM ugreen_collectors)
+  `).run(now);
+});
+
 const protectLegacyPayloads = db.transaction(() => {
   const events = db.prepare("SELECT id, raw_json FROM events WHERE raw_json NOT LIKE 'v1.%'")
     .all() as Array<{ id: string; raw_json: string }>;
@@ -230,6 +242,7 @@ const protectLegacyPayloads = db.transaction(() => {
 });
 
 migrateLegacySourceRecipes();
+repairCollectorSourceRecipes();
 protectLegacyPayloads();
 protectDatabaseFiles();
 

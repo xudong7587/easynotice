@@ -186,13 +186,14 @@ router.put('/:id', (request, response) => {
     return;
   }
   const input = sourceUpdateSchema.parse(request.body);
+  const hasUgreenCollector = Boolean(db.prepare('SELECT 1 FROM ugreen_collectors WHERE source_id = ?').get(existing.id));
   db.transaction(() => {
     db.prepare(`
       UPDATE sources SET name = ?, recipe_id = ?, enabled = ?, route_mode = ?,
         default_image_url = ?, default_image_asset_id = ?, default_link_url = ?, updated_at = ? WHERE id = ?
     `).run(
       input.name || existing.name,
-      input.recipeId || existing.recipe_id,
+      hasUgreenCollector ? 'ugreen-dxp' : input.recipeId || existing.recipe_id,
       input.enabled === undefined ? existing.enabled : input.enabled ? 1 : 0,
       input.routeMode || existing.route_mode,
       input.defaultImageUrl === undefined ? existing.default_image_url : input.defaultImageUrl || null,
@@ -221,7 +222,7 @@ router.post('/:id/regenerate-token', (request, response) => {
 });
 
 router.put('/:id/ugreen', (request, response) => {
-  const existing = db.prepare("SELECT id FROM sources WHERE id = ? AND recipe_id = 'ugreen-dxp'").get(request.params.id);
+  const existing = db.prepare('SELECT source_id FROM ugreen_collectors WHERE source_id = ?').get(request.params.id);
   if (!existing) {
     response.status(404).json({ error: '绿联通知入口不存在' });
     return;

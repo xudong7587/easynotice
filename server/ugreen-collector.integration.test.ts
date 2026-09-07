@@ -90,6 +90,12 @@ describe('UGREEN collector integration', () => {
     expect(updated.body.collector).toMatchObject({ username: 'sunny', passwordConfigured: true, intervalMinutes: 2 });
     expect(updated.body.collector).not.toHaveProperty('password');
 
+    // A collector-backed entrance must never be downgraded to a generic
+    // webhook by an older/stale client payload.
+    const sourceUpdated = await agent.put(`/api/sources/${sourceId}`).send({ recipeId: 'generic' }).expect(200);
+    expect(sourceUpdated.body.source.recipeId).toBe('ugreen-dxp');
+    expect(sourceUpdated.body.source.collector).toBeDefined();
+
     const first = await agent.post(`/api/sources/${sourceId}/ugreen/run`).send({}).expect(200);
     expect(first.body).toMatchObject({ found: 1, seen: 0, queued: 0, seeded: true });
     expect((await agent.get('/api/events').expect(200)).body.events).toHaveLength(0);

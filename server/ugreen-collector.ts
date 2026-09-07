@@ -225,7 +225,7 @@ function loadRunnable(sourceId: string): RunnableCollectorRow | undefined {
     SELECT uc.*, s.name AS source_name, s.enabled AS source_enabled
     FROM ugreen_collectors uc
     JOIN sources s ON s.id = uc.source_id
-    WHERE uc.source_id = ? AND s.recipe_id = 'ugreen-dxp'
+    WHERE uc.source_id = ?
   `).get(sourceId) as RunnableCollectorRow | undefined;
 }
 
@@ -335,7 +335,7 @@ async function schedulerTick(): Promise<void> {
       SELECT uc.source_id
       FROM ugreen_collectors uc
       JOIN sources s ON s.id = uc.source_id
-      WHERE s.enabled = 1 AND s.recipe_id = 'ugreen-dxp'
+      WHERE s.enabled = 1
         AND (uc.last_checked_at IS NULL OR uc.last_checked_at + uc.interval_minutes * 60000 <= ?)
       ORDER BY COALESCE(uc.last_checked_at, 0) ASC
       LIMIT 10
