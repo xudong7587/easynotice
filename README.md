@@ -135,7 +135,9 @@ Telegram Bot（顺位 3，可选）
 | Watchtower / Shoutrrr | 提供通用 Webhook 接法 |
 | 其他应用 | 通用入口可接收 JSON、表单、纯文本、XML 文本和 URL 查询参数 |
 
-OpenWrt PushBot 是一个特殊情况：它的页面没有单独的 URL 输入框，因此不要把通用 Webhook 的地址、请求头、请求体分开填写。进入 EasyNotice 的 OpenWrt 入口后，复制生成的**整段配置**，粘贴到 PushBot 的“自定义推送”大文本框并保存。部分 PushBot 版本存在 DIY 模式凭证检查缺陷：测试消息能收到、真实事件却不发送时，入口详情会给出原因和可直接复制的 SSH 兼容命令。
+OpenWrt 首次接入优先推荐 **微信推送（luci-app-wechatpush）**。它与“全能推送（PushBot）”是同源的不同项目，配置不能混用；已有通知正常工作的用户无需迁移。微信推送使用其自定义 API 功能对接 EasyNotice 通用 Webhook，详见[使用手册](docs/使用手册.md)。目前内置的 OpenWrt 整段配置仍为 **PushBot 专用**。
+
+继续使用 PushBot 时，把入口生成的整段配置粘贴到“自定义推送”大文本框。手动测试成功后，还需验证一次真实事件；测试成功并不代表设备检测正常。仅当日志明确提示“请填写正确的 Token/Webhook”时，才使用入口详情的 SSH 兼容命令。
 
 ## 图片和预览不会偷偷替换真实内容
 
