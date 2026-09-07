@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ArrowsClockwise, CheckCircle, FloppyDisk, HardDrives, PlugsConnected } from '@phosphor-icons/react';
+import { ArrowsClockwise, CheckCircle, FloppyDisk, HardDrives, ListMagnifyingGlass, PlugsConnected } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
-import { timeAgo } from '../lib/format';
+import { formatDate, timeAgo } from '../lib/format';
 import type { Source, UgreenCollector } from '../types';
 import { Button, Callout, StatusBadge } from './ui';
 import { UgreenCollectorFields, type UgreenCollectorDraft } from './UgreenCollectorFields';
@@ -66,7 +66,7 @@ export function UgreenCollectorPanel({ source, onUpdated }: Props) {
     setRunning(true);
     const toastId = toast.loading('正在检查绿联消息中心');
     try {
-      const result = await api<{ found: number; queued: number; seeded: boolean; collector: UgreenCollector }>(`/api/sources/${source.id}/ugreen/run`, { method: 'POST', body: '{}' });
+      const result = await api<{ found: number; seen: number; queued: number; seeded: boolean; collector: UgreenCollector }>(`/api/sources/${source.id}/ugreen/run`, { method: 'POST', body: '{}' });
       onUpdated(result.collector);
       if (result.seeded) toast.success(`已建立消息起点，当前 ${result.found} 条历史消息没有补发`, { id: toastId });
       else if (result.queued) toast.success(`发现 ${result.queued} 条新通知，已进入发送队列`, { id: toastId });
@@ -84,8 +84,14 @@ export function UgreenCollectorPanel({ source, onUpdated }: Props) {
       <div><span><HardDrives size={20} /></span><small>设备地址</small><strong>{collector.baseUrl}</strong></div>
       <div><span><ArrowsClockwise size={20} /></span><small>检查频率</small><strong>每 {collector.intervalMinutes} 分钟</strong></div>
       <div><span><CheckCircle size={20} /></span><small>最近成功</small><strong>{collector.lastSuccessAt ? timeAgo(collector.lastSuccessAt) : '尚未成功'}</strong></div>
+      <div><span><ListMagnifyingGlass size={20} /></span><small>最近结果</small><strong>{collector.lastRun ? `读取 ${collector.lastRun.found} · 入队 ${collector.lastRun.queued}` : '尚无记录'}</strong></div>
     </div>
     {collector.lastError ? <Callout tone="danger" title="最近一次检查失败">{collector.lastError}</Callout> : null}
+    {collector.lastRun?.status === 'success' ? <div className="collector-run-summary">
+      <strong>{collector.lastRun.trigger === 'scheduled' ? '定时检查' : '手动检查'}已完成</strong>
+      <span>读取 {collector.lastRun.found} 条，其中 {collector.lastRun.seen} 条已处理，{collector.lastRun.queued} 条进入发送队列。</span>
+      <small>检查时间：{formatDate(collector.lastRun.completedAt || collector.lastRun.startedAt)}{collector.lastRun.newestMessageAt ? ` · NAS 返回的最新消息：${formatDate(collector.lastRun.newestMessageAt)}` : ''}</small>
+    </div> : null}
     <div className="collector-form">
       <UgreenCollectorFields value={draft} onChange={setDraft} passwordOptional />
       <div className="collector-actions">

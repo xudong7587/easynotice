@@ -87,6 +87,17 @@ export interface UgreenCollector {
   lastSuccessAt?: number;
   lastError?: string;
   nextRunAt?: number;
+  lastRun?: {
+    trigger: 'scheduled' | 'manual';
+    status: 'running' | 'success' | 'failed';
+    startedAt: number;
+    completedAt?: number;
+    found: number;
+    seen: number;
+    queued: number;
+    newestMessageAt?: number;
+    error?: string;
+  };
 }
 
 export interface NoticeRule {

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db, getSetting, setSetting } from '../db.js';
 import { decryptSecret, encryptSecret } from '../crypto.js';
 import { recipes } from '../recipes.js';
+import { buildDiagnosticBundle } from '../diagnostics.js';
 
 const router = Router();
 
@@ -36,6 +37,12 @@ router.get('/', (_request, response) => {
       apiKeyHint: ai?.apiKey ? `${ai.apiKey.slice(0, 4)}••••${ai.apiKey.slice(-4)}` : '',
     },
   });
+});
+
+router.get('/diagnostics/export', (_request, response) => {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  response.setHeader('Content-Disposition', `attachment; filename="easynotice-diagnostics-${timestamp}.json"`);
+  response.json(buildDiagnosticBundle());
 });
 
 const settingsSchema = z.object({

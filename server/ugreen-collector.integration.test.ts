@@ -91,18 +91,29 @@ describe('UGREEN collector integration', () => {
     expect(updated.body.collector).not.toHaveProperty('password');
 
     const first = await agent.post(`/api/sources/${sourceId}/ugreen/run`).send({}).expect(200);
-    expect(first.body).toMatchObject({ found: 1, queued: 0, seeded: true });
+    expect(first.body).toMatchObject({ found: 1, seen: 0, queued: 0, seeded: true });
     expect((await agent.get('/api/events').expect(200)).body.events).toHaveLength(0);
 
     messages.push({ id: 'new', time: 1_780_000_060, level: 'warning', body: '磁盘温度较高' });
     const second = await agent.post(`/api/sources/${sourceId}/ugreen/run`).send({}).expect(200);
-    expect(second.body).toMatchObject({ found: 2, queued: 1, seeded: false });
+    expect(second.body).toMatchObject({ found: 2, seen: 1, queued: 1, seeded: false });
     const events = await agent.get('/api/events').expect(200);
     expect(events.body.events).toHaveLength(1);
     expect(events.body.events[0]).toMatchObject({ title: '绿联 NAS 系统告警', body: '磁盘温度较高', eventType: 'ugreen_warning' });
 
     const third = await agent.post(`/api/sources/${sourceId}/ugreen/run`).send({}).expect(200);
-    expect(third.body.queued).toBe(0);
+    expect(third.body).toMatchObject({ found: 2, seen: 2, queued: 0 });
+    expect(third.body.collector.lastRun).toMatchObject({ trigger: 'manual', status: 'success', found: 2, seen: 2, queued: 0 });
     expect((await agent.get('/api/events').expect(200)).body.events).toHaveLength(1);
+
+    const diagnostics = await agent.get('/api/settings/diagnostics/export').expect(200);
+    expect(diagnostics.headers['content-disposition']).toContain('easynotice-diagnostics-');
+    expect(diagnostics.body.ugreenCollectorRuns[0]).toMatchObject({
+      source: 'source-1', trigger: 'manual', status: 'success', found: 2, alreadySeen: 2, queued: 0,
+    });
+    const exported = JSON.stringify(diagnostics.body);
+    expect(exported).not.toContain('top-secret-nas-password');
+    expect(exported).not.toContain(nasBaseUrl);
+    expect(exported).not.toContain('磁盘温度较高');
   });
 });

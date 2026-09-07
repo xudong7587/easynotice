@@ -88,6 +88,20 @@ db.exec(`
     PRIMARY KEY (source_id, fingerprint)
   );
 
+  CREATE TABLE IF NOT EXISTS ugreen_collector_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+    trigger_type TEXT NOT NULL CHECK (trigger_type IN ('scheduled', 'manual')),
+    status TEXT NOT NULL CHECK (status IN ('running', 'success', 'failed')),
+    started_at INTEGER NOT NULL,
+    completed_at INTEGER,
+    found_count INTEGER NOT NULL DEFAULT 0,
+    seen_count INTEGER NOT NULL DEFAULT 0,
+    queued_count INTEGER NOT NULL DEFAULT 0,
+    newest_message_at INTEGER,
+    error TEXT
+  );
+
   CREATE TABLE IF NOT EXISTS assets (
     id TEXT PRIMARY KEY,
     original_name TEXT NOT NULL,
@@ -166,6 +180,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_wecom_callback_channel_received ON wecom_callback_events(channel_id, received_at DESC);
   CREATE INDEX IF NOT EXISTS idx_ugreen_collectors_due ON ugreen_collectors(last_checked_at);
   CREATE INDEX IF NOT EXISTS idx_ugreen_seen_source_time ON ugreen_seen_messages(source_id, seen_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_ugreen_runs_source_time ON ugreen_collector_runs(source_id, started_at DESC);
   CREATE UNIQUE INDEX IF NOT EXISTS idx_wecom_callback_message_id ON wecom_callback_events(channel_id, message_id) WHERE message_id IS NOT NULL;
 `);
 

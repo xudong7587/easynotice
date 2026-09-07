@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Brain, FloppyDisk, HardDrives, Key, LockKey, ShieldCheck } from '@phosphor-icons/react';
+import { Brain, DownloadSimple, FloppyDisk, HardDrives, Key, Lifebuoy, LockKey, ShieldCheck } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { Button, Callout, Field, Input, PageHeader, Skeleton } from '../components/ui';
@@ -47,6 +47,26 @@ export function SettingsPage() {
     try { await api('/api/settings/password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }); toast.success('密码已更新，请重新登录'); window.setTimeout(() => window.location.reload(), 700); }
     catch (error) { toast.error(error instanceof Error ? error.message : '修改失败'); setSaving(''); }
   };
+  const exportDiagnostics = async () => {
+    setSaving('diagnostics');
+    try {
+      const bundle = await api<Record<string, unknown>>('/api/settings/diagnostics/export');
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `easynotice-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success('脱敏诊断日志已导出');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '导出失败');
+    } finally {
+      setSaving('');
+    }
+  };
 
   if (!settings) return <div><PageHeader title="系统设置" /><Skeleton lines={8} /></div>;
   return <div>
@@ -57,6 +77,8 @@ export function SettingsPage() {
       <section className="panel settings-section"><div className="settings-section__head"><span><Brain size={22} /></span><div><h2>AI 配置助手</h2><p>可选能力，只分析项目说明和截图，不参与真实通知发送。</p></div></div><form className="settings-form" onSubmit={saveAi}><div className="form-grid form-grid--2"><Field label="OpenAI 兼容接口地址"><Input value={aiBaseUrl} onChange={(event) => setAiBaseUrl(event.target.value)} /></Field><Field label="模型名称"><Input value={aiModel} onChange={(event) => setAiModel(event.target.value)} /></Field></div><Field label="API Key" hint={settings.ai.configured ? `已配置 ${settings.ai.apiKeyHint}，留空表示不修改` : '密钥将使用 AES-256-GCM 加密保存'}><Input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={settings.ai.configured ? '已保存，输入新 Key 才会替换' : 'sk-...'} required={!settings.ai.configured} /></Field><Callout>截图可能包含敏感信息。上传前请遮住 Token、Cookie、Webhook Key 和公网 IP 等内容。</Callout><Button type="submit" disabled={saving === 'ai'}><Key size={16} />{saving === 'ai' ? '正在保存…' : '保存 AI 配置'}</Button></form></section>
 
       <section className="panel settings-section"><div className="settings-section__head"><span><LockKey size={22} /></span><div><h2>修改管理密码</h2><p>修改后会让所有已登录设备退出。</p></div></div><form className="settings-form" onSubmit={changePassword}><Field label="当前密码"><Input type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required /></Field><div className="form-grid form-grid--2"><Field label="新密码"><Input type="password" autoComplete="new-password" minLength={8} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required /></Field><Field label="再次输入新密码"><Input type="password" autoComplete="new-password" minLength={8} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></Field></div><Button type="submit" variant="secondary" disabled={saving === 'password'}><ShieldCheck size={16} />{saving === 'password' ? '正在更新…' : '更新密码'}</Button></form></section>
+
+      <section className="panel settings-section"><div className="settings-section__head"><span><Lifebuoy size={22} /></span><div><h2>诊断与支持</h2><p>导出采集、入口和投递状态，方便定位消息停在哪一步。</p></div></div><div className="settings-form"><Callout>诊断包不会包含管理地址、用户名、密码、入口令牌、出口密钥、消息标题正文或原始数据。提交问题前仍建议自行检查文件内容。</Callout><Button type="button" variant="secondary" onClick={() => void exportDiagnostics()} disabled={saving === 'diagnostics'}><DownloadSimple size={16} />{saving === 'diagnostics' ? '正在整理…' : '导出脱敏诊断日志'}</Button></div></section>
     </div>
   </div>;
 }

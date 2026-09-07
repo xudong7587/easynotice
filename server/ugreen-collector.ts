@@ -53,11 +53,24 @@ export interface UgreenCollectorView {
   lastSuccessAt?: number;
   lastError?: string;
   nextRunAt?: number;
+  lastRun?: {
+    trigger: 'scheduled' | 'manual';
+    status: 'running' | 'success' | 'failed';
+    startedAt: number;
+    completedAt?: number;
+    found: number;
+    seen: number;
+    queued: number;
+    newestMessageAt?: number;
+    error?: string;
+  };
 }
 
 export interface UgreenRunResult {
   found: number;
+  seen: number;
   queued: number;
+  newestMessageAt?: number;
   initialized: boolean;
   seeded: boolean;
 }
@@ -158,6 +171,15 @@ export function getUgreenCollectorView(sourceId: string): UgreenCollectorView | 
   const row = collectorRow(sourceId);
   if (!row) return undefined;
   const credentials = decryptCredentials(row);
+  const lastRun = db.prepare(`
+    SELECT trigger_type, status, started_at, completed_at, found_count, seen_count,
+      queued_count, newest_message_at, error
+    FROM ugreen_collector_runs WHERE source_id = ? ORDER BY started_at DESC LIMIT 1
+  `).get(sourceId) as {
+    trigger_type: 'scheduled' | 'manual'; status: 'running' | 'success' | 'failed';
+    started_at: number; completed_at: number | null; found_count: number; seen_count: number;
+    queued_count: number; newest_message_at: number | null; error: string | null;
+  } | undefined;
   return {
     type: 'ugreen-dxp',
     baseUrl: credentials.baseUrl,
@@ -171,6 +193,17 @@ export function getUgreenCollectorView(sourceId: string): UgreenCollectorView | 
     lastSuccessAt: row.last_success_at || undefined,
     lastError: row.last_error || undefined,
     nextRunAt: row.last_checked_at ? row.last_checked_at + row.interval_minutes * 60_000 : Date.now(),
+    lastRun: lastRun ? {
+      trigger: lastRun.trigger_type,
+      status: lastRun.status,
+      startedAt: lastRun.started_at,
+      completedAt: lastRun.completed_at || undefined,
+      found: lastRun.found_count,
+      seen: lastRun.seen_count,
+      queued: lastRun.queued_count,
+      newestMessageAt: lastRun.newest_message_at || undefined,
+      error: lastRun.error || undefined,
+    } : undefined,
   };
 }
 
@@ -211,7 +244,15 @@ function rememberMessages(sourceId: string, messages: Array<{ fingerprint: strin
   `).run(sourceId, sourceId);
 }
 
-export async function runUgreenCollector(sourceId: string): Promise<UgreenRunResult> {
+function trimRunHistory(sourceId: string): void {
+  db.prepare(`
+    DELETE FROM ugreen_collector_runs WHERE source_id = ? AND id NOT IN (
+      SELECT id FROM ugreen_collector_runs WHERE source_id = ? ORDER BY started_at DESC LIMIT 100
+    )
+  `).run(sourceId, sourceId);
+}
+
+export async function runUgreenCollector(sourceId: string, trigger: 'scheduled' | 'manual' = 'manual'): Promise<UgreenRunResult> {
   if (activeSources.has(sourceId)) throw Object.assign(new Error('绿联通知正在检查，请稍后再试'), { statusCode: 409 });
   const row = loadRunnable(sourceId);
   if (!row) throw Object.assign(new Error('绿联通知入口不存在'), { statusCode: 404 });
@@ -219,6 +260,10 @@ export async function runUgreenCollector(sourceId: string): Promise<UgreenRunRes
 
   activeSources.add(sourceId);
   const checkedAt = Date.now();
+  const runId = Number(db.prepare(`
+    INSERT INTO ugreen_collector_runs (source_id, trigger_type, status, started_at)
+    VALUES (?, ?, 'running', ?)
+  `).run(sourceId, trigger, checkedAt).lastInsertRowid);
   db.prepare('UPDATE ugreen_collectors SET last_checked_at = ?, updated_at = ? WHERE source_id = ?')
     .run(checkedAt, checkedAt, sourceId);
   try {
@@ -240,6 +285,7 @@ export async function runUgreenCollector(sourceId: string): Promise<UgreenRunRes
     const firstRun = !row.initialized;
     const pending = firstRun && !row.import_recent ? [] : messages.filter((message) => !seen.has(message.fingerprint));
     const completedAt = Date.now();
+    const newestMessageAt = messages.reduce((latest, message) => Math.max(latest, message.receivedAt), 0) || undefined;
 
     db.transaction(() => {
       for (const message of pending) {
@@ -255,14 +301,25 @@ export async function runUgreenCollector(sourceId: string): Promise<UgreenRunRes
         UPDATE ugreen_collectors SET initialized = 1, last_success_at = ?, last_error = NULL, updated_at = ?
         WHERE source_id = ?
       `).run(completedAt, completedAt, sourceId);
+      db.prepare(`
+        UPDATE ugreen_collector_runs SET status = 'success', completed_at = ?, found_count = ?,
+          seen_count = ?, queued_count = ?, newest_message_at = ? WHERE id = ?
+      `).run(completedAt, messages.length, seen.size, pending.length, newestMessageAt || null, runId);
+      trimRunHistory(sourceId);
     })();
     if (pending.length) wakeWorker();
-    return { found: messages.length, queued: pending.length, initialized: true, seeded: firstRun && !row.import_recent };
+    return { found: messages.length, seen: seen.size, queued: pending.length, newestMessageAt, initialized: true, seeded: firstRun && !row.import_recent };
   } catch (error) {
     sessionCache.delete(sourceId);
     const message = redactSensitiveText(error instanceof Error ? error.message : '检查绿联通知失败').slice(0, 800);
-    db.prepare('UPDATE ugreen_collectors SET last_error = ?, updated_at = ? WHERE source_id = ?')
-      .run(message, Date.now(), sourceId);
+    const failedAt = Date.now();
+    db.transaction(() => {
+      db.prepare('UPDATE ugreen_collectors SET last_error = ?, updated_at = ? WHERE source_id = ?')
+        .run(message, failedAt, sourceId);
+      db.prepare("UPDATE ugreen_collector_runs SET status = 'failed', completed_at = ?, error = ? WHERE id = ?")
+        .run(failedAt, message, runId);
+      trimRunHistory(sourceId);
+    })();
     throw new Error(message);
   } finally {
     activeSources.delete(sourceId);
@@ -285,7 +342,7 @@ async function schedulerTick(): Promise<void> {
     `).all(now) as Array<{ source_id: string }>;
     for (const item of due) {
       try {
-        await runUgreenCollector(item.source_id);
+        await runUgreenCollector(item.source_id, 'scheduled');
       } catch (error) {
         console.warn('[EasyNotice] 绿联通知检查失败：', redactSensitiveText(error instanceof Error ? error.message : String(error)));
       }
