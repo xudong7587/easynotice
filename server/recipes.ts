@@ -197,11 +197,13 @@ export const recipes: Recipe[] = [
       '清空“自定义推送”大文本框中的示例内容，点击上方“复制整段配置”，完整粘贴一次；不要拆分 URL、请求头和请求体。',
       '保存并应用后，点击文本框下方“发送测试”。随后回到 EasyNotice 的通知记录确认已收到。',
       '测试成功后，再到“推送内容”页勾选公网 IP、设备上下线、负载温度、Web/SSH 登录等需要的事件。',
+      '如果测试能收到、真实事件却没有通知，请按入口详情中的提示，通过 OpenWrt SSH 执行一次兼容命令并重启 PushBot。',
     ],
     tips: [
       '生成内容已包含 EasyNotice 地址、POST JSON、标题 ${1}、正文 ${2} 和旧版 PushBot 需要的格式字段，不需要再手工修改。',
       'OpenWrt 必须能够访问配置中生成的 EasyNotice 地址；如果 EasyNotice 填的是仅浏览器可用的域名，请先确认路由器自身也能解析和访问。',
       'luci-app-pushbot 5.10 及以上仅支持 LuCI 23.05 及以上；旧固件请选择相应的兼容版本。',
+      '部分 PushBot 版本会在 DIY 模式下错误检查内置渠道凭证，导致后台任务未运行；EasyNotice 会在入口详情提供可复制的兼容命令。',
     ],
     setupMode: 'openwrt-pushbot',
     searchTerms: ['openwrt', 'istore', 'istoreos', '软路由', 'pushbot', 'wechatpush', '全能推送', '自定义api'],

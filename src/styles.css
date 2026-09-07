@@ -349,6 +349,19 @@ img { display: block; max-width: 100%; }
 .pushbot-config pre { max-height: 390px; }
 .pushbot-config__note { display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 9px 12px; border-top: 1px solid #2b3831; background: #18221d; color: #aebbb4; font-size: 11px; line-height: 1.5; }
 .pushbot-config__note svg { flex: none; margin-top: 1px; }
+.pushbot-setup__compatibility { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 11px; padding: 13px 14px; border: 1px solid #e3c894; border-radius: var(--radius); background: #fff8e8; }
+.pushbot-setup__warning-icon { display: flex; margin-top: 1px; color: #a76408; }
+.pushbot-setup__compatibility-body { display: grid; min-width: 0; gap: 6px; }
+.pushbot-setup__compatibility-body small { color: #8b570f; font-size: 11px; font-weight: 720; letter-spacing: .04em; }
+.pushbot-setup__compatibility-body strong { font-size: 13px; line-height: 1.45; }
+.pushbot-setup__compatibility-body p { margin: 0; color: var(--text-muted); font-size: 11.5px; line-height: 1.55; }
+.pushbot-setup__command { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; padding: 8px 8px 8px 11px; border: 1px solid #ddc797; border-radius: calc(var(--radius) - 2px); background: rgba(255, 255, 255, .72); }
+.pushbot-setup__command pre { min-width: 0; overflow: auto; margin: 0; color: var(--text); font-size: 10.5px; line-height: 1.55; white-space: pre-wrap; }
+.pushbot-setup__command .button { flex: none; }
+:root[data-theme="dark"] .pushbot-setup__compatibility { border-color: #65522d; background: #272214; }
+:root[data-theme="dark"] .pushbot-setup__warning-icon,
+:root[data-theme="dark"] .pushbot-setup__compatibility-body small { color: #e0ad54; }
+:root[data-theme="dark"] .pushbot-setup__command { border-color: #5b4b2d; background: rgba(0, 0, 0, .16); }
 .webhook-template-picker { display: grid; gap: 12px; padding-top: 4px; }
 .webhook-template-picker__heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; padding: 4px 1px 0; }
 .webhook-template-picker__heading > div { display: grid; gap: 3px; }
