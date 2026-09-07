@@ -119,7 +119,19 @@ const sourceSchema = sourceFields.superRefine((input, context) => {
     context.addIssue({ code: 'custom', path: ['collectorConfig'], message: '请填写绿联 NAS 的连接信息' });
   }
 });
-const sourceUpdateSchema = sourceFields.omit({ collectorConfig: true }).partial();
+// Keep update fields genuinely optional. Calling `.partial()` on the creation
+// schema would retain its defaults, so a request that only saved an image or
+// link was parsed with `channelIds: []` and silently removed every outlet.
+const sourceUpdateSchema = z.object({
+  name: z.string().trim().min(1, '请填写入口名称').max(80).optional(),
+  recipeId: z.string().trim().min(1).optional(),
+  routeMode: z.enum(['failover', 'broadcast']).optional(),
+  channelIds: z.array(z.string()).optional(),
+  enabled: z.boolean().optional(),
+  defaultImageUrl: z.union([z.string().url('默认图片地址格式不正确'), z.literal('')]).optional(),
+  defaultImageAssetId: z.string().optional(),
+  defaultLinkUrl: z.union([z.string().url('图文跳转链接格式不正确'), z.literal('')]).optional(),
+});
 
 router.post('/ugreen/test-connection', async (request, response) => {
   const input = ugreenCollectorSchema.parse(request.body);
@@ -202,7 +214,7 @@ router.put('/:id', (request, response) => {
       Date.now(),
       existing.id,
     );
-    if (input.channelIds) replaceChannels(existing.id, input.channelIds);
+    if (input.channelIds !== undefined) replaceChannels(existing.id, input.channelIds);
   })();
   const row = db.prepare('SELECT * FROM sources WHERE id = ?').get(existing.id) as SourceRow;
   response.json({ source: serialize(row, requestBaseUrl(request)) });

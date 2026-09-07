@@ -17,7 +17,7 @@ const messages: Record<string, unknown>[] = [{ id: 'old', time: 1_780_000_000, l
 let nasServer: http.Server;
 let nasBaseUrl = '';
 let agent: ReturnType<typeof supertest.agent>;
-let database: { close: () => void; prepare: (sql: string) => { get: (...params: unknown[]) => unknown } };
+let database: { close: () => void; prepare: (sql: string) => { get: (...params: unknown[]) => unknown; run: (...params: unknown[]) => unknown } };
 
 function decrypt(value: string): string {
   return crypto.privateDecrypt({ key: privateKey, padding: crypto.constants.RSA_PKCS1_PADDING }, Buffer.from(value, 'base64')).toString('utf8');
@@ -85,6 +85,14 @@ describe('UGREEN collector integration', () => {
     expect(stored.config_encrypted).toMatch(/^v1\./);
     expect(stored.config_encrypted).not.toContain('top-secret-nas-password');
 
+    const now = Date.now();
+    database.prepare(`
+      INSERT INTO channels (id, name, type, config_encrypted, enabled, created_at, updated_at)
+      VALUES ('test-channel', '测试出口', 'wecom_robot', 'encrypted-placeholder', 1, ?, ?)
+    `).run(now, now);
+    database.prepare('INSERT INTO source_channels (source_id, channel_id, sort_order) VALUES (?, ?, 0)')
+      .run(sourceId, 'test-channel');
+
     await agent.post(`/api/sources/${sourceId}/ugreen/test`).send({}).expect(200);
     const updated = await agent.put(`/api/sources/${sourceId}/ugreen`).send({ intervalMinutes: 2 }).expect(200);
     expect(updated.body.collector).toMatchObject({ username: 'sunny', passwordConfigured: true, intervalMinutes: 2 });
@@ -95,6 +103,11 @@ describe('UGREEN collector integration', () => {
     const sourceUpdated = await agent.put(`/api/sources/${sourceId}`).send({ recipeId: 'generic' }).expect(200);
     expect(sourceUpdated.body.source.recipeId).toBe('ugreen-dxp');
     expect(sourceUpdated.body.source.collector).toBeDefined();
+    expect(sourceUpdated.body.source.channelIds).toEqual(['test-channel']);
+
+    const presentationUpdated = await agent.put(`/api/sources/${sourceId}`).send({ defaultLinkUrl: 'https://notice.example/nas' }).expect(200);
+    expect(presentationUpdated.body.source.channelIds).toEqual(['test-channel']);
+    database.prepare('DELETE FROM source_channels WHERE source_id = ?').run(sourceId);
 
     const first = await agent.post(`/api/sources/${sourceId}/ugreen/run`).send({}).expect(200);
     expect(first.body).toMatchObject({ found: 1, seen: 0, queued: 0, seeded: true });
