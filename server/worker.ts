@@ -5,9 +5,10 @@ import { decryptSecret, decryptStoredData } from './crypto.js';
 import { uploadDir } from './config.js';
 import { publicAssetUrl } from './media.js';
 import { deliverToChannel } from './channels.js';
-import type { ChannelConfig, ChannelType, NoticeForDelivery, RouteMode } from './types.js';
+import type { ChannelConfig, ChannelType, NoticeForDelivery, QuietHours, RouteMode } from './types.js';
 import { redactSensitiveText } from './security.js';
 import { builtInPreviewImagePath, builtInPreviewImageUrl } from './preview.js';
+import { quietHoursReason } from './quiet-hours.js';
 
 interface EventRow {
   id: string;
@@ -96,9 +97,19 @@ function buildNotice(event: EventRow, sourceName: string): NoticeForDelivery {
   };
 }
 
-async function sendOne(event: EventRow, route: RouteRow, notice: NoticeForDelivery): Promise<boolean> {
+async function sendOne(event: EventRow, route: RouteRow, notice: NoticeForDelivery): Promise<'success' | 'failed' | 'skipped'> {
   let lastError = '';
   for (let attempt = 1; attempt <= 2; attempt += 1) {
+    // Reload before every attempt so a retry or a configuration change cannot bypass quiet hours.
+    const channel = db.prepare('SELECT quiet_hours FROM channels WHERE id = ?').get(route.id) as { quiet_hours: string };
+    const quietReason = quietHoursReason(JSON.parse(channel.quiet_hours) as QuietHours);
+    if (quietReason) {
+      db.prepare(`
+        INSERT INTO deliveries (id, event_id, channel_id, attempt, status, completed_at, response_excerpt)
+        VALUES (?, ?, ?, 0, 'skipped', ?, ?)
+      `).run(nanoid(), event.id, route.id, Date.now(), quietReason);
+      return 'skipped';
+    }
     const deliveryId = nanoid();
     const startedAt = Date.now();
     db.prepare(`
@@ -118,7 +129,7 @@ async function sendOne(event: EventRow, route: RouteRow, notice: NoticeForDelive
         UPDATE channels SET last_status = 'success', last_error = NULL, last_success_at = ?, updated_at = ?
         WHERE id = ?
       `).run(completedAt, completedAt, route.id);
-      return true;
+      return 'success';
     } catch (error) {
       const completedAt = Date.now();
       lastError = redactSensitiveText(error instanceof Error ? error.message : '未知发送错误');
@@ -132,7 +143,7 @@ async function sendOne(event: EventRow, route: RouteRow, notice: NoticeForDelive
   db.prepare(`
     UPDATE channels SET last_status = 'failed', last_error = ?, updated_at = ? WHERE id = ?
   `).run(lastError.slice(0, 800), Date.now(), route.id);
-  return false;
+  return 'failed';
 }
 
 async function processEvent(event: EventRow): Promise<void> {
@@ -157,16 +168,16 @@ async function processEvent(event: EventRow): Promise<void> {
       `).run(nanoid(), event.id, route.id, Date.now(), '前一个渠道已送达，无需启用备用渠道');
       continue;
     }
-    const success = await sendOne(event, route, notice);
-    if (success) successes += 1;
-    else failures += 1;
+    const result = await sendOne(event, route, notice);
+    if (result === 'success') successes += 1;
+    else if (result === 'failed') failures += 1;
   }
 
-  const status = successes === 0 ? 'failed' : failures > 0 ? 'partial' : 'success';
+  const status = successes === 0 ? (failures > 0 ? 'failed' : 'skipped') : failures > 0 ? 'partial' : 'success';
   db.prepare(`UPDATE events SET status = ?, processed_at = ?, error = ? WHERE id = ?`).run(
     status,
     Date.now(),
-    successes === 0 ? '所有通知渠道均发送失败' : null,
+    status === 'failed' ? '所有可发送的通知出口均发送失败，请查看投递过程' : null,
     event.id,
   );
 }

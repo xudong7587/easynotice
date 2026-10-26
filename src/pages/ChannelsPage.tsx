@@ -3,13 +3,31 @@ import { Archive, ArrowRight, ChatText, Check, ImageSquare, PaperPlaneTilt, Penc
 import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { formatDate } from '../lib/format';
-import type { Channel, ChannelType, Source } from '../types';
+import type { Channel, ChannelType, QuietHours, Source } from '../types';
 import { channelMeta } from '../components/channelMeta';
 import { ChannelSetupGuide } from '../components/ChannelSetupGuide';
 import { DialogShell } from '../components/DialogShell';
 import { Button, Callout, CopyButton, EmptyState, Field, Input, NativeSelect, PageHeader, Skeleton, StatusBadge } from '../components/ui';
 
 const types = Object.keys(channelMeta) as ChannelType[];
+const defaultQuietHours: QuietHours = { enabled: false, start: '22:00', end: '08:00', timeZone: 'Asia/Shanghai' };
+const timeZones = [
+  ['Asia/Shanghai', '北京时间'],
+  ['Asia/Hong_Kong', '香港时间'],
+  ['Asia/Taipei', '台北时间'],
+  ['Asia/Singapore', '新加坡时间'],
+  ['Asia/Tokyo', '东京时间'],
+  ['Europe/London', '伦敦时间'],
+  ['Europe/Berlin', '柏林时间'],
+  ['America/New_York', '纽约时间'],
+  ['America/Los_Angeles', '洛杉矶时间'],
+  ['UTC', '协调世界时'],
+];
+
+function quietHoursSummary(settings: QuietHours): string {
+  const zoneName = timeZones.find(([zone]) => zone === settings.timeZone)?.[1] || settings.timeZone;
+  return `${settings.start}–${settings.start > settings.end ? '次日 ' : ''}${settings.end}（${zoneName}）`;
+}
 
 function blankConfig(type: ChannelType): Record<string, unknown> {
   if (type === 'wecom_app') return { corpId: '', corpSecret: '', agentId: '', toUser: '@all', toParty: '', callbackEnabled: false, callbackToken: '', callbackEncodingAesKey: '' };
@@ -92,6 +110,7 @@ export function ChannelsPage() {
   const [type, setType] = useState<ChannelType>('wecom_robot');
   const [name, setName] = useState('企业微信群机器人');
   const [config, setConfig] = useState<Record<string, unknown>>(blankConfig('wecom_robot'));
+  const [quietHours, setQuietHours] = useState<QuietHours>(defaultQuietHours);
   const [saving, setSaving] = useState(false);
   const [previewing, setPreviewing] = useState<Channel>();
   const [previewSourceId, setPreviewSourceId] = useState('');
@@ -108,9 +127,11 @@ export function ChannelsPage() {
 
   const startCreate = () => {
     setEditing(undefined); setType('wecom_robot'); setName('企业微信群机器人'); setConfig(blankConfig('wecom_robot')); setOpen(true);
+    setQuietHours({ ...defaultQuietHours });
   };
   const startEdit = (channel: Channel) => {
     setEditing(channel); setType(channel.type); setName(channel.name); setConfig(editConfig(channel)); setOpen(true);
+    setQuietHours({ ...channel.quietHours });
   };
   const chooseType = (value: ChannelType) => {
     setType(value); setName(channelMeta[value].name); setConfig(blankConfig(value));
@@ -119,7 +140,7 @@ export function ChannelsPage() {
     event.preventDefault(); setSaving(true);
     try {
       const path = editing ? `/api/channels/${editing.id}` : '/api/channels';
-      await api(path, { method: editing ? 'PUT' : 'POST', body: JSON.stringify({ name, type, config, enabled: true }) });
+      await api(path, { method: editing ? 'PUT' : 'POST', body: JSON.stringify({ name, type, config, quietHours, enabled: editing?.enabled ?? true }) });
       toast.success(editing ? '渠道设置已保存' : '通知出口已添加'); setOpen(false); load();
     } catch (error) { toast.error(error instanceof Error ? error.message : '保存失败'); }
     finally { setSaving(false); }
@@ -169,7 +190,7 @@ export function ChannelsPage() {
       return <article className={`channel-card ${!channel.enabled ? 'is-disabled' : ''}`} key={channel.id}>
         <div className="channel-card__top"><span className="channel-logo channel-logo--large"><Icon size={25} weight="duotone" /></span><StatusBadge status={channel.enabled ? channel.lastStatus : 'archived'} /></div>
         <h2>{channel.name}</h2><p>{meta.description}</p>
-        <dl className="channel-card__facts"><div><dt>渠道类型</dt><dd>{meta.short}</dd></div><div><dt>最近成功</dt><dd>{channel.lastSuccessAt ? formatDate(channel.lastSuccessAt) : '尚未成功发送'}</dd></div></dl>
+        <dl className="channel-card__facts"><div><dt>渠道类型</dt><dd>{meta.short}</dd></div><div><dt>最近成功</dt><dd>{channel.lastSuccessAt ? formatDate(channel.lastSuccessAt) : '尚未成功发送'}</dd></div><div><dt>免打扰</dt><dd>{channel.quietHours.enabled ? quietHoursSummary(channel.quietHours) : '未开启'}</dd></div></dl>
         {channel.lastError ? <div className="inline-error">{channel.lastError}</div> : null}
         <div className="channel-card__actions"><Button variant="secondary" size="sm" onClick={() => openPreview(channel)} disabled={!channel.enabled}>{channel.type === 'wecom_robot' ? <ChatText size={16} /> : <ImageSquare size={16} />}{channel.type === 'wecom_robot' ? '文字预览' : '图文预览'}</Button><Button variant="quiet" size="sm" onClick={() => startEdit(channel)}><PencilSimple size={16} />编辑</Button>{channel.enabled ? <Button variant="quiet" size="sm" onClick={() => archive(channel)}><Archive size={16} />停用</Button> : <Button variant="quiet" size="sm" onClick={() => remove(channel)}><Trash size={16} />删除</Button>}</div>
       </article>;
@@ -177,6 +198,7 @@ export function ChannelsPage() {
 
     <DialogShell open={Boolean(previewing)} onOpenChange={(value) => { if (!value && !previewSending) setPreviewing(undefined); }} title={previewing ? `预览 ${previewing.name}` : '消息预览'} description={robotPreview ? '群机器人固定发送纯文字；这里只模拟所选来源的标题和正文。' : '选择一个通知来源，EasyNotice 会按它的测试样例和图片规则发送。'} size="sm" footer={<><Button variant="secondary" onClick={() => setPreviewing(undefined)} disabled={previewSending}>取消</Button><Button onClick={() => void sendPreview()} disabled={previewSending}>{robotPreview ? <ChatText size={16} /> : <ImageSquare size={16} />}{previewSending ? '正在发送…' : robotPreview ? '发送文字预览' : '发送图文预览'}</Button></>}>
       <div className="preview-dialog">
+        {previewing?.quietHours.enabled ? <Callout title="预览也遵守免打扰">每天 {quietHoursSummary(previewing.quietHours)} 暂停发送，包括测试预览。</Callout> : null}
         {robotPreview ? <Callout title="企微机器人保持纯文字">测试消息会包含标题、正文和来源名称，不会附带或跳转到默认图片。企微应用与 Telegram 仍可使用图文预览。</Callout> : <Callout title="这次会看到完整测试消息">标题、正文、来源名称和事件字段会模拟真实通知，并明确标注“测试”；该来源已有图片规则时优先使用规则图片，否则使用内置封面。</Callout>}
         <Field label="模拟哪个通知来源" hint="没有来源时也可以使用内置 Lucky 样例"><NativeSelect value={previewSourceId} onChange={(event) => setPreviewSourceId(event.target.value)}><option value="">Lucky 主路由（内置样例）</option>{sources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}</NativeSelect></Field>
         {!robotPreview ? <div className="preview-cover"><img src="/notification-preview.png" alt="原木桌上的路由器与 NAS 通知预览封面" /><div><small>没有匹配图片规则时</small><strong>使用这张内置封面</strong><p>这里只展示兜底图。真正发送时会优先套用所选来源的规则图片。</p></div></div> : null}
@@ -189,6 +211,18 @@ export function ChannelsPage() {
         <ChannelSetupGuide type={type} />
         <Field label="渠道名称" required><Input value={name} onChange={(event) => setName(event.target.value)} /></Field>
         <ChannelFields type={type} config={config} setConfig={setConfig} editing={Boolean(editing)} channel={editing} />
+        <fieldset className="field-group">
+          <legend>免打扰时间</legend>
+          <label className="check-row"><input type="checkbox" checked={quietHours.enabled} onChange={(event) => setQuietHours({ ...quietHours, enabled: event.target.checked })} /><span><strong>每天定时免打扰</strong><small>时段内跳过这个出口的通知，记录仍保留，结束后不自动补发</small></span></label>
+          {quietHours.enabled ? <>
+            <div className="form-grid form-grid--2">
+              <Field label="开始时间" required><Input type="time" step={60} value={quietHours.start} onChange={(event) => setQuietHours({ ...quietHours, start: event.target.value })} required /></Field>
+              <Field label="结束时间" hint={quietHours.start > quietHours.end ? '结束时间为次日' : undefined} required><Input type="time" step={60} value={quietHours.end} onChange={(event) => setQuietHours({ ...quietHours, end: event.target.value })} required /></Field>
+            </div>
+            <Field label="使用时区" hint="按所选时区执行，不受 NAS 或浏览器时区影响"><NativeSelect value={quietHours.timeZone} onChange={(event) => setQuietHours({ ...quietHours, timeZone: event.target.value })}>{!timeZones.some(([zone]) => zone === quietHours.timeZone) ? <option value={quietHours.timeZone}>{quietHours.timeZone}</option> : null}{timeZones.map(([zone, label]) => <option value={zone} key={zone}>{label}（{zone}）</option>)}</NativeSelect></Field>
+            <Callout>每天 {quietHoursSummary(quietHours)} 跳过发送，包括测试预览和手动重发。其他出口仍按路线发送；如需夜间完全免打扰，请为相关出口都开启。</Callout>
+          </> : null}
+        </fieldset>
       </form>
     </DialogShell>
   </div>;

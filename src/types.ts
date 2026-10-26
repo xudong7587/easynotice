@@ -1,6 +1,13 @@
 export type ChannelType = 'wecom_app' | 'wecom_robot' | 'telegram' | 'bark';
 export type RouteMode = 'failover' | 'broadcast';
-export type NoticeStatus = 'pending' | 'processing' | 'success' | 'partial' | 'failed';
+export type NoticeStatus = 'pending' | 'processing' | 'success' | 'partial' | 'failed' | 'skipped';
+
+export interface QuietHours {
+  enabled: boolean;
+  start: string;
+  end: string;
+  timeZone: string;
+}
 
 export interface RecipeWebhookTemplate {
   id: string;
@@ -35,6 +42,7 @@ export interface Channel {
   name: string;
   type: ChannelType;
   enabled: boolean;
+  quietHours: QuietHours;
   lastStatus: string;
   lastError?: string;
   lastSuccessAt?: number;

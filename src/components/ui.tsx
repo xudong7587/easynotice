@@ -63,7 +63,7 @@ const statusMap: Record<string, { label: string; tone: string }> = {
   processing: { label: '正在发送', tone: 'info' },
   untested: { label: '尚未验证', tone: 'neutral' },
   archived: { label: '已停用', tone: 'neutral' },
-  skipped: { label: '未启用备用', tone: 'neutral' },
+  skipped: { label: '已跳过', tone: 'neutral' },
   sending: { label: '正在发送', tone: 'info' },
 };
 

@@ -193,6 +193,7 @@ ensureColumn('sources', 'default_image_url', 'TEXT');
 ensureColumn('sources', 'default_image_asset_id', 'TEXT REFERENCES assets(id) ON DELETE SET NULL');
 ensureColumn('sources', 'default_link_url', 'TEXT');
 ensureColumn('events', 'image_asset_id', 'TEXT REFERENCES assets(id) ON DELETE SET NULL');
+ensureColumn('channels', 'quiet_hours', `TEXT NOT NULL DEFAULT '{"enabled":false,"start":"22:00","end":"08:00","timeZone":"Asia/Shanghai"}'`);
 
 function protectDatabaseFiles(): void {
   for (const file of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {

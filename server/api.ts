@@ -32,6 +32,7 @@ router.get('/dashboard', (_request, response) => {
   const eventCount24h = scalar('SELECT COUNT(*) AS count FROM events WHERE received_at >= ?', since);
   const successCount24h = scalar("SELECT COUNT(*) AS count FROM events WHERE received_at >= ? AND status IN ('success', 'partial')", since);
   const failedCount24h = scalar("SELECT COUNT(*) AS count FROM events WHERE received_at >= ? AND status = 'failed'", since);
+  const skippedCount24h = scalar("SELECT COUNT(*) AS count FROM events WHERE received_at >= ? AND status = 'skipped'", since);
   const pendingCount = scalar("SELECT COUNT(*) AS count FROM events WHERE status IN ('pending', 'processing')");
   const configuredRoutes = scalar('SELECT COUNT(*) AS count FROM source_channels');
   const recent = db.prepare(`
@@ -53,7 +54,7 @@ router.get('/dashboard', (_request, response) => {
       successCount24h,
       failedCount24h,
       pendingCount,
-      successRate24h: eventCount24h ? Math.round((successCount24h / eventCount24h) * 100) : null,
+      successRate24h: eventCount24h > skippedCount24h ? Math.round((successCount24h / (eventCount24h - skippedCount24h)) * 100) : null,
     },
     quickStart: {
       hasChannel: channelCount > 0,

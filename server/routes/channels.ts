@@ -5,10 +5,11 @@ import { db } from '../db.js';
 import { decryptSecret, encryptSecret } from '../crypto.js';
 import { deliverToChannel } from '../channels.js';
 import { maskChannelConfig, parseChannelConfig } from '../validation.js';
-import type { ChannelConfig, ChannelType } from '../types.js';
+import type { ChannelConfig, ChannelType, QuietHours } from '../types.js';
 import { requestBaseUrl } from '../url.js';
 import { redactSensitiveText } from '../security.js';
 import { buildChannelPreview } from '../preview.js';
+import { defaultQuietHours, quietHoursReason, quietHoursSchema } from '../quiet-hours.js';
 
 const router = Router();
 
@@ -18,6 +19,7 @@ interface ChannelRow {
   type: ChannelType;
   config_encrypted: string;
   enabled: number;
+  quiet_hours: string;
   last_status: string;
   last_error: string | null;
   last_success_at: number | null;
@@ -38,6 +40,7 @@ function serialize(row: ChannelRow, baseUrl: string) {
     name: row.name,
     type: row.type,
     enabled: Boolean(row.enabled),
+    quietHours: JSON.parse(row.quiet_hours) as QuietHours,
     lastStatus: row.last_status,
     lastError: row.last_error,
     lastSuccessAt: row.last_success_at,
@@ -60,7 +63,8 @@ const channelSchema = z.object({
   name: z.string().trim().min(1, '请填写渠道名称').max(80),
   type: z.enum(['wecom_app', 'wecom_robot', 'telegram', 'bark']),
   config: z.record(z.string(), z.unknown()),
-  enabled: z.boolean().optional().default(true),
+  enabled: z.boolean().optional(),
+  quietHours: quietHoursSchema.optional(),
 });
 
 router.post('/', (request, response) => {
@@ -69,9 +73,9 @@ router.post('/', (request, response) => {
   const now = Date.now();
   const id = nanoid();
   db.prepare(`
-    INSERT INTO channels (id, name, type, config_encrypted, enabled, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, input.name, input.type, encryptSecret(config), input.enabled ? 1 : 0, now, now);
+    INSERT INTO channels (id, name, type, config_encrypted, enabled, quiet_hours, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, input.name, input.type, encryptSecret(config), input.enabled === false ? 0 : 1, JSON.stringify(input.quietHours ?? defaultQuietHours), now, now);
   const row = db.prepare('SELECT * FROM channels WHERE id = ?').get(id) as ChannelRow;
   response.status(201).json({ channel: serialize(row, requestBaseUrl(request)) });
 });
@@ -87,12 +91,13 @@ router.put('/:id', (request, response) => {
   const type = input.type || existing.type;
   const config = input.config ? parseChannelConfig(type, input.config, currentConfig) : currentConfig;
   db.prepare(`
-    UPDATE channels SET name = ?, type = ?, config_encrypted = ?, enabled = ?, updated_at = ? WHERE id = ?
+    UPDATE channels SET name = ?, type = ?, config_encrypted = ?, enabled = ?, quiet_hours = ?, updated_at = ? WHERE id = ?
   `).run(
     input.name || existing.name,
     type,
     encryptSecret(config),
     input.enabled === undefined ? existing.enabled : input.enabled ? 1 : 0,
+    input.quietHours === undefined ? existing.quiet_hours : JSON.stringify(input.quietHours),
     Date.now(),
     existing.id,
   );
@@ -130,6 +135,11 @@ router.post('/:id/test', async (request, response, next) => {
     return;
   }
   const input = z.object({ sourceId: z.string().trim().optional() }).parse(request.body || {});
+  const quietReason = quietHoursReason(JSON.parse(row.quiet_hours) as QuietHours);
+  if (quietReason) {
+    response.status(409).json({ error: quietReason });
+    return;
+  }
   const notice = buildChannelPreview(input.sourceId || undefined, requestBaseUrl(request));
   if (!notice) {
     response.status(404).json({ error: '用于预览的通知来源不存在' });

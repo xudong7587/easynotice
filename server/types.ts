@@ -1,7 +1,14 @@
 export type ChannelType = 'wecom_app' | 'wecom_robot' | 'telegram' | 'bark';
 export type RouteMode = 'failover' | 'broadcast';
 export type DeliveryStatus = 'queued' | 'sending' | 'success' | 'failed' | 'skipped';
-export type EventStatus = 'pending' | 'processing' | 'success' | 'partial' | 'failed';
+export type EventStatus = 'pending' | 'processing' | 'success' | 'partial' | 'failed' | 'skipped';
+
+export interface QuietHours {
+  enabled: boolean;
+  start: string;
+  end: string;
+  timeZone: string;
+}
 
 export interface WeComAppConfig {
   corpId: string;
