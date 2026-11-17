@@ -2,6 +2,8 @@
 
 把 NAS、软路由和 Docker 应用各说各话的通知，统一收进 EasyNotice，再按你的习惯送到企业微信、Telegram 或 Bark。
 
+[官方网站](https://dunn.fun/easynotice/)
+
 ![EasyNotice 默认通知预览](./public/notification-preview.png)
 
 通知不该要求用户先学会 Webhook、JSON 和请求头。EasyNotice 的目标很直接：**原应用只负责把事情告诉 EasyNotice，EasyNotice 负责识别内容、选择渠道、失败补位，并留下可查的记录。**
